@@ -1,0 +1,20 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.3, 1.6, 0.5, 1)",
+        "createdAt": "2026-11-09T18:10:23.136Z",
+        "reason": "Claude: intentional springy bump on balances/round number, part of the felt-table game-night motion the user approved; used app-wide before this session"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.2, 1.4, 0.4, 1)",
+        "createdAt": "2026-11-09T18:10:23.493Z",
+        "reason": "Claude: intentional pop-in for toasts and result cards, existing app-wide motion language of the approved felt-table design"
+      }
+    ]
+  }
+}

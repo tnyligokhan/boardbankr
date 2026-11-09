@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CreditCard,
   Dices,
+  Download,
   Gavel,
   Hand,
   LogOut,
@@ -13,9 +14,12 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Share,
   SlidersHorizontal,
+  SquarePlus,
   Trophy,
   Undo2,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -40,6 +44,7 @@ import { ApiError, api } from '../lib/api';
 import { compactMoney, durationParts, formatDate, formatMoney } from '../lib/format';
 import type { MessageKey } from '../lib/dictionary';
 import { useI18n } from '../lib/i18n';
+import { useInstall } from '../lib/install';
 import { useSession } from '../lib/session';
 import { useToast } from '../lib/toast';
 import { GoogleMark } from './Login';
@@ -168,6 +173,7 @@ export default function Home() {
       <main className="mx-auto max-w-5xl px-4 pt-6 pb-20 sm:px-6">
         <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_21rem] lg:gap-8">
           <div className="flex min-w-0 flex-col gap-8">
+            <InstallCard />
             <QuickStart last={data?.finished[0] ?? null} />
             <TableFeatures />
             {user.kind === 'guest' && googleEnabled && (
@@ -234,6 +240,71 @@ export default function Home() {
 
       <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} piece={current} />
     </div>
+  );
+}
+
+/**
+ * Put BoardBankr on the home screen. Chrome and friends get a button that opens their own
+ * install dialog; an iPhone gets the two Safari steps, since Safari has no such dialog.
+ * Gone for good once dismissed, and never shown inside the installed app.
+ */
+function InstallCard() {
+  const { t } = useI18n();
+  const toast = useToast();
+  const { mode, install, dismiss } = useInstall();
+  const [busy, setBusy] = useState(false);
+  if (!mode) return null;
+
+  return (
+    <section aria-labelledby="install-title" className="felt relative flex flex-col gap-4 rounded-[1.4rem] p-5 sm:flex-row sm:items-center sm:gap-5">
+      <button
+        type="button"
+        onClick={dismiss}
+        aria-label={t('close')}
+        className="absolute top-2.5 right-2.5 inline-flex size-9 items-center justify-center rounded-xl text-white/60 hover:bg-white/10 hover:text-white"
+      >
+        <X aria-hidden className="size-4" />
+      </button>
+      <div className="flex items-center gap-4 pr-8 sm:flex-1">
+        <img src="/icon-192.png" alt="" width={56} height={56} className="size-14 shrink-0 rounded-[1.1rem] shadow-[0_3px_0_rgb(0_0_0/0.25)]" />
+        <div className="min-w-0">
+          <h2 id="install-title" className="font-display text-lg leading-tight font-bold">
+            {t('installTitle')}
+          </h2>
+          <p className="mt-0.5 text-[0.92rem] leading-snug text-white/75">{t('installBody')}</p>
+        </div>
+      </div>
+      {mode === 'prompt' ? (
+        <Button
+          busy={busy}
+          className="shrink-0"
+          onClick={async () => {
+            setBusy(true);
+            const ok = await install();
+            setBusy(false);
+            if (ok) toast.success(t('installDone'));
+          }}
+        >
+          <Download aria-hidden className="size-5" />
+          {t('installAction')}
+        </Button>
+      ) : (
+        <ol className="flex shrink-0 flex-col gap-2 text-[0.92rem] font-semibold">
+          <li className="flex items-center gap-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/12">
+              <Share aria-hidden className="size-4" />
+            </span>
+            {t('installIos1')}
+          </li>
+          <li className="flex items-center gap-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/12">
+              <SquarePlus aria-hidden className="size-4" />
+            </span>
+            {t('installIos2')}
+          </li>
+        </ol>
+      )}
+    </section>
   );
 }
 
