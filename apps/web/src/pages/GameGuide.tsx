@@ -1,6 +1,6 @@
 import { Link, Navigate, useParams } from 'react-router';
 import { ChevronRight } from 'lucide-react';
-import { CATALOG, PLAYER_COLORS, PLAYER_TOKENS, findCatalogGame } from '@mdb/shared';
+import { CATALOG, PLAYER_COLORS, PLAYER_TOKENS, findCatalogGame, tipsFor } from '@mdb/shared';
 import { BankChip } from '../components/BankChip';
 import { RoundTable } from '../components/RoundTable';
 import { CtaLink, FaqList, GameTiles, SiteFooter, SiteHeader, useSeo } from '../components/Site';
@@ -26,6 +26,7 @@ export default function GameGuide() {
   const index = CATALOG.indexOf(game);
   const next = `/new?edition=${game.edition}`;
   const steps = [t('how1Title'), t('how2Title'), t('how3Title')];
+  const tips = tipsFor(game.slug, lang);
   const seats = NAMES.map((name, i) => ({
     id: name,
     name,
@@ -95,6 +96,26 @@ export default function GameGuide() {
               <li key={s} className="card flex items-center gap-3.5 px-4 py-4">
                 <Token color={PLAYER_COLORS[(index + i) % PLAYER_COLORS.length]!} token={(['crown', 'rocket', 'gem'] as const)[i]!} size={40} />
                 <span className="font-display text-lg font-bold">{s}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section aria-labelledby="tips-title" className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:pb-20">
+          <h2 id="tips-title" className="font-display text-[clamp(1.8rem,4.5vw,2.4rem)] leading-tight font-extrabold">
+            {t('tipsTitle', { name: game.name })}
+          </h2>
+          <p className="mt-2 max-w-[60ch] text-ink-2">{t('tipsLead')}</p>
+          <ol className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2 md:gap-4">
+            {tips.map((tip, i) => (
+              <li key={tip} className="card flex items-start gap-4 p-5 sm:p-6 md:last:odd:col-span-2">
+                <span
+                  aria-hidden
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-gold font-display text-lg font-extrabold text-gold-ink tabular shadow-[inset_0_0_0_3px_rgb(255_255_255/0.45),0_3px_0_var(--gold-deep)]"
+                >
+                  {i + 1}
+                </span>
+                <p className="pt-1.5 leading-relaxed text-ink-2">{tip}</p>
               </li>
             ))}
           </ol>

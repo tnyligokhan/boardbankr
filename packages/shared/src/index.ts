@@ -5,3 +5,4 @@ export * from './engine';
 export * from './catalog';
 export * from './legal';
 export * from './routes';
+export * from './tips';

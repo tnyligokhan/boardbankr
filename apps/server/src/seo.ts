@@ -1,4 +1,4 @@
-import { CATALOG, FAQ, LEGAL, findCatalogGame, parsePublicPath, publicPath, type CatalogGame, type PublicPage, type SiteLang } from '@mdb/shared';
+import { CATALOG, FAQ, LEGAL, findCatalogGame, parsePublicPath, publicPath, tipsFor, type CatalogGame, type PublicPage, type SiteLang } from '@mdb/shared';
 
 /**
  * Server-side SEO for a client-rendered app.
@@ -29,6 +29,7 @@ const TEXT = {
       'Monopoly, Monopoly Elektronik Bankacılık, Molipoly, Metropol, Hotel Tycoon, Milyoner, Cashflow ve kağıt parayla oynanan diğer masa oyunları için dijital banka.',
     create: 'Oyun kur',
     setupFor: (name: string) => `${name} için masa kur`,
+    tipsTitle: (name: string) => `${name} kazanma rehberi`,
     alsoKnown: 'Diğer adlarıyla',
     otherGames: 'Diğer oyunlar',
     faqTitle: 'Sık sorulan sorular',
@@ -52,6 +53,7 @@ const TEXT = {
       'A digital bank for Monopoly, Monopoly Electronic Banking, Cashflow, Hotel Tycoon, Anti-Monopoly and every other board game played with paper money.',
     create: 'Start a game',
     setupFor: (name: string) => `Set up a table for ${name}`,
+    tipsTitle: (name: string) => `How to win at ${name}`,
     alsoKnown: 'Also known as',
     otherGames: 'Other games',
     faqTitle: 'Frequently asked questions',
@@ -162,7 +164,7 @@ function gamePage(base: string, lang: SiteLang, g: CatalogGame): SeoPage {
     ],
     body: `<main><h1>${esc(text.title)}</h1>${text.body.map((p) => `<p>${esc(p)}</p>`).join('')}<p>${esc(t.alsoKnown)}: ${esc(
       g.aliases.join(', '),
-    )}</p><p><a href="/new?edition=${g.edition}">${esc(t.setupFor(g.name))}</a></p><h2>${esc(t.otherGames)}</h2><ul>${others}</ul></main>${footer(lang)}`,
+    )}</p><p><a href="/new?edition=${g.edition}">${esc(t.setupFor(g.name))}</a></p><h2>${esc(t.tipsTitle(g.name))}</h2><ol>${tipsFor(g.slug, lang).map((tip) => `<li>${esc(tip)}</li>`).join("")}</ol><h2>${esc(t.otherGames)}</h2><ul>${others}</ul></main>${footer(lang)}`,
   };
 }
 

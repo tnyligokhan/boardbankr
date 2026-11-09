@@ -1,5 +1,5 @@
-import { lazy, Suspense, type ReactNode } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
+import { lazy, Suspense, useLayoutEffect, type ReactNode } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigationType } from 'react-router';
 import { I18nProvider, PublicLang, useI18n } from './lib/i18n';
 import { SessionProvider, useSession } from './lib/session';
 import { ToastProvider } from './lib/toast';
@@ -24,6 +24,19 @@ function Loading() {
   );
 }
 
+/**
+ * A new page opens at the top. Without this the browser keeps the old scroll position, so a
+ * footer link lands halfway down the next page. Back and forward (POP) keep where you were.
+ */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  const type = useNavigationType();
+  useLayoutEffect(() => {
+    if (type !== 'POP') window.scrollTo(0, 0);
+  }, [pathname, type]);
+  return null;
+}
+
 function RequireUser({ children }: { children: ReactNode }) {
   const { user, loading } = useSession();
   const location = useLocation();
@@ -41,6 +54,7 @@ export function App() {
       <ToastProvider>
         <SessionProvider>
           <BrowserRouter>
+            <ScrollToTop />
             <Suspense fallback={<Loading />}>
               <Routes>
                 <Route path="/" element={<PublicLang lang="tr"><Landing /></PublicLang>} />

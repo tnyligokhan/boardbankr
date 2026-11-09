@@ -46,6 +46,8 @@ const tr = {
   setupFor: '{name} için masa kur',
   alsoKnown: 'Diğer adlarıyla',
   otherGames: 'Diğer oyunlar',
+  tipsTitle: '{name} kazanma rehberi',
+  tipsLead: 'Masada fark yaratan birkaç alışkanlık. Paranın hesabını BoardBankr tutar, siz oyuna odaklanın.',
   disclaimer:
     'Monopoly, Hasbro, Inc.’in tescilli markasıdır; adı geçen diğer oyun adları da sahiplerine aittir. BoardBankr bağımsızdır, hiçbir oyun üreticisiyle bağlantılı değildir ve onlar tarafından onaylanmamıştır. Uygulamadaki paralar sanaldır, gerçek bir değeri yoktur.',
   footerLegal: 'Yasal uyarı',
@@ -349,6 +351,8 @@ const en: Dictionary = {
   setupFor: 'Set up a table for {name}',
   alsoKnown: 'Also known as',
   otherGames: 'Other games',
+  tipsTitle: 'How to win at {name}',
+  tipsLead: 'A few habits that make the difference at the table. BoardBankr keeps the money straight, so you can focus on the game.',
   disclaimer:
     'Monopoly is a registered trademark of Hasbro, Inc.; the other game names mentioned belong to their owners. BoardBankr is independent, not affiliated with or endorsed by any game publisher. Money in the app is play money with no real value.',
   footerLegal: 'Legal notice',

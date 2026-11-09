@@ -67,6 +67,14 @@ describe('seo', () => {
     expect(html).toContain('href="/new?edition=electronic"');
   });
 
+  it('gives every guide page a how-to-win section in its own language', () => {
+    for (const g of CATALOG) {
+      expect(seoFor(`/oyun/${g.slug}`, PUBLIC_URL).body).toContain(`<h2>${g.name.replace(/&/g, '&amp;')} kazanma rehberi</h2><ol><li>`);
+      expect(seoFor(`/en/games/${g.slug}`, PUBLIC_URL).body).toContain(`<h2>How to win at ${g.name.replace(/&/g, '&amp;')}</h2><ol><li>`);
+    }
+    expect(seoFor('/oyun/cashflow', PUBLIC_URL).body).toContain('fare yarışından');
+  });
+
   it('escapes text and lists every game in the sitemap', () => {
     const page = { ...seoFor('/', PUBLIC_URL), title: '<script>"x"</script>' };
     expect(renderShell(TEMPLATE, page, PUBLIC_URL)).toContain('&lt;script&gt;&quot;x&quot;&lt;/script&gt;');
