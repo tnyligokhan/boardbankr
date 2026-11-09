@@ -7,6 +7,7 @@ import { FitText } from '../components/FitText';
 import { Token } from '../components/Token';
 import { Button, buttonClass } from '../components/ui';
 import { compactMoney, durationParts, formatMoney } from '../lib/format';
+import { sounds } from '../lib/fx';
 import { useI18n } from '../lib/i18n';
 import type { Connection } from '../lib/useGame';
 import { ActivityList, GameTopBar } from './common';
@@ -91,6 +92,7 @@ export function Finished({ game, meId, connection }: { game: GameSnapshot; meId:
     } catch {
       /* ignore */
     }
+    sounds.finish(iWon);
     void import('canvas-confetti').then(({ default: confetti }) => {
       const colors = ['#ffc53d', '#ff5b4f', '#4a86ff', '#2fc98d', '#a06bff', '#ff6fae', '#ffffff'];
       confetti({ particleCount: iWon ? 160 : 90, spread: 80, origin: { y: 0.3 }, colors, disableForReducedMotion: true });

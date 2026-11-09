@@ -6,7 +6,7 @@ import { GameTopBar } from '../game/common';
 import { Finished } from '../game/Finished';
 import { Lobby } from '../game/Lobby';
 import { Table } from '../game/Table';
-import { buzz, ching } from '../lib/fx';
+import { buzz, ching, sounds } from '../lib/fx';
 import { formatMoney } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
@@ -31,6 +31,16 @@ export default function Game() {
       }
       const lastSeen = prev.transactions[0]?.id ?? 0;
       const fresh = next.transactions.filter((tx) => tx.id > lastSeen).reverse();
+      // sounds the whole table hears
+      if (fresh.some((tx) => tx.kind === 'bankruptcy')) sounds.bankrupt();
+      if (fresh.some((tx) => tx.kind === 'reversal' && (tx.fromUserId === meId || tx.toUserId === meId))) sounds.undo();
+      const pa = prev.auction;
+      const na = next.auction;
+      if (na?.status === 'open' && pa?.id !== na.id) sounds.gavel(1);
+      else if (na && pa?.id === na.id) {
+        if (pa.status === 'open' && na.status === 'sold') sounds.gavel(2);
+        else if (na.status === 'open' && na.bids.length > pa.bids.length && na.bids[na.bids.length - 1]!.userId !== meId) sounds.bid();
+      }
       for (const tx of fresh) {
         if (tx.toUserId !== meId || tx.actorUserId === meId || tx.amount <= 0) continue;
         const from = next.players.find((p) => p.userId === tx.fromUserId);
@@ -46,6 +56,7 @@ export default function Game() {
       if (next.turnUserId === meId && prev.turnUserId !== meId) {
         toast.turn(next.round > prev.round ? t('roundStartsYou', { n: next.round }) : t('yourTurnToast'), me);
         buzz([20, 60, 20]);
+        sounds.myTurn();
       } else if (next.round > prev.round) {
         toast.turn(t('roundStarted', { n: next.round }));
       }

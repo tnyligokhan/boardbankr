@@ -21,7 +21,7 @@ import { RoundTable, type RoundTableHandle } from '../components/RoundTable';
 import { ConfirmSheet, Sheet } from '../components/Sheet';
 import { Token } from '../components/Token';
 import { Button, IconButton, Toggle } from '../components/ui';
-import { buzz, coinsFor, flyCoins, useSoundSetting } from '../lib/fx';
+import { buzz, ching, coinsFor, flyCoins, sounds, useSoundSetting } from '../lib/fx';
 import { formatMoney } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { useToast } from '../lib/toast';
@@ -161,6 +161,12 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
       return () => clearTimeout(timer);
     }
   }, [auction]);
+  // the last three seconds tick
+  const secondsLeft = auction?.status === 'open' ? Math.ceil(auctionLeft / 1000) : 0;
+  useEffect(() => {
+    if (secondsLeft > 0 && secondsLeft <= 3) sounds.tick(secondsLeft === 1);
+  }, [secondsLeft]);
+
   // when the countdown runs out, ask the server to settle (it also does so on its own)
   const auctionId = auction?.status === 'open' ? auction.id : null;
   const expired = auctionId !== null && auctionLeft <= 0;
@@ -198,6 +204,7 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
     setBusy(null);
     if (r.ok) {
       buzz(20);
+      ching(true);
       toast.success(done, undoLastAction());
     } else toast.error(errorText(r.error));
   };

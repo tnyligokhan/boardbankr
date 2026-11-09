@@ -14,7 +14,7 @@ import { FitText } from '../components/FitText';
 import { Sheet } from '../components/Sheet';
 import { Token } from '../components/Token';
 import { Button, Field, Segmented, TextInput } from '../components/ui';
-import { buzz } from '../lib/fx';
+import { buzz, sounds } from '../lib/fx';
 import { formatMoney, quickAmounts } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { storage } from '../lib/storage';
@@ -75,12 +75,14 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
     setShown(roll);
     setRolling(true);
     buzz(12);
+    sounds.diceShake(ROLL_MS);
     const shuffle = setInterval(() => setFaces(roll.dice.map(() => 1 + Math.floor(Math.random() * 6))), 90);
     const land = setTimeout(() => {
       clearInterval(shuffle);
       setRolling(false);
       setFaces(roll.dice);
       buzz(25);
+      sounds.diceLand();
     }, ROLL_MS);
     const hide = setTimeout(() => setShown(null), ROLL_MS + SHOW_MS);
     return () => {
