@@ -1,0 +1,894 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/rubik';
+@import '@fontsource-variable/figtree';
+
+/*
+ * "Felt table". Game screens sit on green card-table felt around a wood-rimmed round table;
+ * everything you read or type sits on warm paper. Gold is the bank: coins, the bank chip and
+ * the main actions. Each player has a bright colour and a game piece. One deliberate light look.
+ */
+:root {
+  color-scheme: light;
+  --felt: #0f5640;
+  --felt-deep: #0a3f2f;
+  --felt-hi: #17714f;
+  --wood: #7a4a26;
+  --wood-hi: #a06838;
+  --wood-dark: #5c3519;
+  --gold: #ffc53d;
+  --gold-deep: #d99a14;
+  --gold-ink: #3b2800;
+  --paper: #fbf9f4;
+  --card: #ffffff;
+  --sand: #f1ede3;
+  --line: #e5e0d3;
+  --ink: #15201a;
+  --ink-2: #5b6660;
+  --ink-3: #8f9993;
+  --gain: #13825d;
+  --gain-felt: #7ff0bf;
+  --loss: #d93a32;
+  --loss-felt: #ff9c94;
+  --loss-soft: #fbe3e1;
+  --scrim: rgb(6 26 19 / 0.55);
+}
+
+/* Where the pointer is on a piece or chip, for its light (see useTilt). Registered so they can be transitioned. */
+@property --tx { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --ty { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --lift { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+@theme inline {
+  --font-display: 'Rubik Variable', 'Trebuchet MS', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Figtree Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-felt: var(--felt);
+  --color-felt-deep: var(--felt-deep);
+  --color-felt-hi: var(--felt-hi);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-ink: var(--gold-ink);
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-sand: var(--sand);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-gain: var(--gain);
+  --color-gain-felt: var(--gain-felt);
+  --color-loss: var(--loss);
+  --color-loss-felt: var(--loss-felt);
+  --color-loss-soft: var(--loss-soft);
+}
+
+/*
+ * Player colours. Keys are stored in the database. --note-ink is the icon on a piece: a deep
+ * tone of the same colour, at least 4.5:1 on its piece. White failed 3:1 on five of the
+ * eight (1.5:1 on yellow).
+ */
+[data-note='rose'] { --note: #ff5b4f; --note-ink: #4a0905; }
+[data-note='sun'] { --note: #ffcf33; --note-ink: #4d3300; }
+[data-note='mint'] { --note: #2fc98d; --note-ink: #053d27; }
+[data-note='sky'] { --note: #4a86ff; --note-ink: #071f57; }
+[data-note='lilac'] { --note: #a06bff; --note-ink: #230a57; }
+[data-note='peach'] { --note: #ff8c3a; --note-ink: #552300; }
+[data-note='aqua'] { --note: #22c3d1; --note-ink: #043a40; }
+[data-note='sand'] { --note: #ff6fae; --note-ink: #5a0730; }
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    background: var(--paper);
+  }
+  body {
+    margin: 0;
+    overflow-x: clip;
+    min-height: 100dvh;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 3px solid var(--gold);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+  button,
+  [role='button'] {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  input {
+    font: inherit;
+  }
+  h1,
+  h2,
+  h3 {
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+  p,
+  li {
+    overflow-wrap: break-word;
+  }
+  ::selection {
+    background: var(--gold);
+    color: var(--gold-ink);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+@utility pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Card-table felt: a soft lamp light from above and a fine weave. */
+@utility felt {
+  color: #fff;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 30%, var(--felt-hi) 0%, transparent 70%),
+    radial-gradient(rgb(255 255 255 / 0.04) 1px, transparent 1.2px) 0 0 / 5px 5px,
+    var(--felt);
+}
+
+@layer components {
+  /* ---------- buttons: chunky, they sink in when pressed ---------- */
+  .btn {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    height: 3.1rem;
+    padding: 0 1.25rem;
+    border-radius: 0.875rem;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    user-select: none;
+    transition: transform 80ms, box-shadow 80ms, filter 150ms, background-color 200ms, opacity 150ms;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+  }
+  .btn:not(:disabled):hover {
+    filter: brightness(1.04);
+  }
+  .btn:not(:disabled):active {
+    transform: translateY(3px);
+  }
+  .btn-lg {
+    height: 3.6rem;
+    padding: 0 1.5rem;
+    border-radius: 1rem;
+    font-size: 1rem;
+  }
+  .btn-sm {
+    height: 2.5rem;
+    padding: 0 0.9rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+  }
+  .btn-gold {
+    background: var(--gold);
+    color: var(--gold-ink);
+    box-shadow: 0 4px 0 var(--gold-deep);
+  }
+  .btn-gold:not(:disabled):active {
+    box-shadow: 0 1px 0 var(--gold-deep);
+  }
+  .btn-ink {
+    background: var(--ink);
+    color: var(--paper);
+    box-shadow: 0 4px 0 #000;
+  }
+  .btn-white {
+    background: #fff;
+    color: var(--felt-deep);
+    box-shadow: 0 4px 0 rgb(0 0 0 / 0.3);
+  }
+  .btn-ink:not(:disabled):active,
+  .btn-white:not(:disabled):active {
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.3);
+  }
+  .btn-paper {
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 2px var(--line), 0 3px 0 var(--line);
+  }
+  .btn-paper:not(:disabled):active {
+    box-shadow: inset 0 0 0 2px var(--line);
+  }
+  .btn-glass {
+    background: rgb(255 255 255 / 0.12);
+    color: #fff;
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.18);
+  }
+  .btn-glass:not(:disabled):hover {
+    background: rgb(255 255 255 / 0.18);
+  }
+  .btn-danger {
+    background: var(--loss);
+    color: #fff;
+    box-shadow: 0 4px 0 #a82720;
+  }
+  .btn-danger:not(:disabled):active {
+    box-shadow: 0 1px 0 #a82720;
+  }
+  .btn-quiet {
+    color: var(--ink-2);
+  }
+  .btn-quiet:not(:disabled):hover {
+    background: var(--sand);
+    color: var(--ink);
+  }
+
+  /* paper card with a printed edge */
+  .card {
+    background: var(--card);
+    border-radius: 1.25rem;
+    box-shadow: 0 0 0 1.5px var(--line), 0 3px 0 var(--line);
+  }
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .felt .eyebrow {
+    color: rgb(255 255 255 / 0.55);
+  }
+
+  /* ---------- player piece ---------- */
+  .tok {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    color: var(--note-ink, #fff);
+    background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.38), transparent 55%), var(--note, #4a86ff);
+    box-shadow: inset 0 0 0 3px rgb(255 255 255 / 0.35), inset 0 -3px 0 rgb(0 0 0 / 0.16), 0 3px 0 rgb(0 0 0 / 0.28);
+    /*
+     * The light follows the pointer (useTilt sets --tx/--ty), but the piece itself never
+     * moves: tilting it in 3D or nudging the icon by fractions of a pixel makes it blurry.
+     */
+    --tilt-ease:
+      --tx 600ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      --ty 600ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      --lift 400ms ease;
+    transition: var(--tilt-ease);
+  }
+  .tok[data-tilt] {
+    --lift: 1;
+    --tilt-ease: --tx 70ms linear, --ty 70ms linear, --lift 200ms ease;
+  }
+  .tok > svg {
+    width: 50%;
+    height: 50%;
+    filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.3));
+  }
+  .tok[data-muted] {
+    filter: grayscale(1);
+    opacity: 0.55;
+  }
+  /*
+   * clip-path, not overflow + border-radius: on a composited layer the browser can drop the
+   * rounded overflow clip, and the moving glint leaks out as a square streak.
+   * The clip makes the layer its own group, so the light is blended onto the piece here,
+   * once for the whole layer; blending each child would only see the empty group.
+   */
+  .tok-shine {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    clip-path: circle(50% at 50% 50%);
+    mix-blend-mode: soft-light;
+    pointer-events: none;
+  }
+  .tok-shine > span {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+  .tok-glare {
+    background: radial-gradient(
+      farthest-corner circle at calc((var(--tx) + 1) * 50%) calc((var(--ty) + 1) * 50%),
+      rgb(255 255 255 / 0.85) 0%,
+      rgb(255 255 255 / 0.2) 30%,
+      transparent 60%
+    );
+    opacity: calc(0.25 + var(--lift) * 0.75);
+  }
+  /* holographic sheen where the light hits, only while the pointer is on the piece */
+  .tok-foil {
+    background: repeating-linear-gradient(
+      115deg,
+      hsl(350 90% 72%) 0%,
+      hsl(48 95% 68%) 8%,
+      hsl(150 80% 62%) 16%,
+      hsl(205 95% 68%) 24%,
+      hsl(275 85% 74%) 32%,
+      hsl(350 90% 72%) 40%
+    );
+    background-size: 260% 260%;
+    background-position: calc(50% + var(--tx) * 45%) calc(50% + var(--ty) * 45%);
+    opacity: calc(var(--lift) * 0.35);
+    -webkit-mask-image: radial-gradient(circle at calc((var(--tx) + 1) * 50%) calc((var(--ty) + 1) * 50%), #000 0%, transparent 75%);
+    mask-image: radial-gradient(circle at calc((var(--tx) + 1) * 50%) calc((var(--ty) + 1) * 50%), #000 0%, transparent 75%);
+  }
+  /* a light sweep across the piece when the pointer arrives */
+  .tok-glint {
+    background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.7) 48%, rgb(255 255 255 / 0.15) 56%, transparent 70%);
+    transform: translateX(-120%);
+    animation: tok-glint 800ms cubic-bezier(0.3, 0, 0.2, 1) both;
+  }
+
+  /* ---------- the logo coin ---------- */
+  /* A real 3D coin (Logo.tsx): two faces and a cylinder of edge strips, turned on rotateY. */
+  .logo-coin {
+    position: relative;
+    display: block;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    perspective: 360px;
+  }
+  .logo-coin-body {
+    position: absolute;
+    inset: 0;
+    transition: scale 150ms;
+  }
+  /* 3D only while it turns; at rest it is one flat, sharp face */
+  .logo-coin[data-spinning] .logo-coin-body {
+    transform-style: preserve-3d;
+  }
+  .logo-coin:not([data-spinning]) :is(.logo-coin-seg, .logo-coin-face[data-back]) {
+    display: none;
+  }
+  .logo-coin[data-spinning] .logo-coin-face {
+    transform: translateZ(1.5px);
+  }
+  .logo-coin[data-spinning] .logo-coin-face[data-back] {
+    transform: rotateY(180deg) translateZ(1.5px);
+  }
+  /* the near side grows in perspective; a touch smaller keeps the turning coin inside its box */
+  .logo-coin[data-spinning] .logo-coin-body {
+    scale: 0.94;
+  }
+  .logo-coin-seg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+  }
+  .logo-coin-face {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--gold-ink);
+    background: radial-gradient(circle at 35% 30%, #ffe9a8, var(--gold) 60%);
+    box-shadow: inset 0 0 0 3px rgb(255 255 255 / 0.45), 0 3px 0 var(--gold-deep);
+    transition: box-shadow 150ms;
+  }
+  /* while it turns the real edge shows the thickness, so the painted one goes */
+  .logo-coin[data-spinning] .logo-coin-face {
+    box-shadow: inset 0 0 0 3px rgb(255 255 255 / 0.45);
+    backface-visibility: hidden;
+  }
+
+  /* ---------- the game screen ---------- */
+  /*
+   * One viewport tall, so the turn button is always on screen in portrait. The table fills
+   * what the controls leave (.table-fit). Very short screens (a phone on its side) get
+   * 38rem and scroll instead of shrinking the table to nothing.
+   */
+  .game-screen {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 38rem;
+    padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
+  }
+  .table-fit {
+    display: grid;
+    flex: 1 1 0;
+    place-items: center;
+    width: 100%;
+    min-height: 0;
+    container-type: size;
+  }
+  /*
+   * As wide as fits, but never taller than the space. The 6.7rem is what hangs outside the
+   * square: the top plate (pushed up further when its player wears the crown) and mine below.
+   */
+  .table-fit > .table {
+    width: min(25rem, calc(100cqw - 3rem), calc(100cqh - 6.7rem));
+    margin: 3.8rem auto 2.9rem;
+  }
+  /* short screens: the drag hint goes first, then the buttons get slimmer */
+  @media (max-height: 760px) {
+    .game-hint {
+      display: none;
+    }
+    .game-screen .btn {
+      height: 2.75rem;
+    }
+    .game-screen .btn-lg {
+      height: 3.1rem;
+    }
+  }
+  /* very short screens: the turn pill goes too; the gold ring and the turn button still say whose turn it is */
+  @media (max-height: 700px) {
+    .game-turn-pill {
+      display: none;
+    }
+  }
+
+  /* ---------- the round table ---------- */
+  .table {
+    position: relative;
+    /* leave room at the sides: the seats at 3 and 9 o'clock hang over the edge of the square */
+    width: min(25rem, calc(100% - 3rem));
+    aspect-ratio: 1;
+    /* seats stick out past the square with their name plates: above at the top, below at the bottom */
+    margin: 2.75rem auto 3rem;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .table-top {
+    position: absolute;
+    inset: 18%;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 38%, rgb(255 255 255 / 0.1), transparent 55%),
+      radial-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1.3px) 0 0 / 4px 4px,
+      radial-gradient(circle at 50% 50%, #1b8660 0%, #136b4c 62%, #0e5a40 100%);
+    box-shadow: 0 0 0 2px var(--wood-dark), 0 16px 34px rgb(0 0 0 / 0.4), inset 0 8px 22px rgb(0 0 0 / 0.38);
+  }
+  /* wood rim with a grain */
+  .table-top::before {
+    content: '';
+    position: absolute;
+    inset: -13px;
+    z-index: -1;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 8deg, var(--wood) 0deg 5deg, #84522b 5deg 9deg, #74451f 9deg 13deg);
+    box-shadow: inset 0 2px 0 var(--wood-hi), inset 0 -3px 0 var(--wood-dark), 0 4px 0 #4a2a13;
+  }
+  .table-top::after {
+    content: '';
+    position: absolute;
+    inset: 8%;
+    border-radius: 50%;
+    border: 1.5px dashed rgb(255 255 255 / 0.13);
+  }
+  .table-center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    transform: translate(-50%, -50%);
+  }
+  .bank-chip {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    width: 5rem;
+    height: 5rem;
+    border-radius: 50%;
+    color: var(--gold-ink);
+    background: radial-gradient(circle at 35% 30%, #ffe08a, var(--gold) 60%);
+    box-shadow: inset 0 0 0 4px rgb(255 255 255 / 0.5), inset 0 -4px 0 rgb(0 0 0 / 0.12), 0 5px 0 var(--gold-deep), 0 10px 20px rgb(0 0 0 / 0.25);
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    /* same glare and glint as the pieces (see .tok and useTilt); the chip itself stays put */
+    --tilt-ease:
+      --tx 600ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      --ty 600ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      --lift 400ms ease;
+    transition:
+      translate 180ms,
+      scale 180ms,
+      box-shadow 180ms,
+      var(--tilt-ease);
+  }
+  .bank-chip[data-tilt] {
+    --lift: 1;
+    --tilt-ease: --tx 70ms linear, --ty 70ms linear, --lift 200ms ease;
+  }
+  button.bank-chip:hover {
+    translate: 0 -2px;
+  }
+  .pot-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 1.9rem;
+    padding: 0 0.75rem 0 0.25rem;
+    border-radius: 9999px;
+    background: rgb(0 0 0 / 0.3);
+    color: #fff;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: transform 180ms, box-shadow 180ms;
+  }
+  .pot-chip > i {
+    display: grid;
+    place-items: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--felt);
+    font-size: 0.7rem;
+    font-style: normal;
+    font-weight: 800;
+  }
+  /*
+   * A seat is the size of its piece and centred on the seat point, so every piece sits
+   * exactly on the circle round the table. The name plate hangs outside it, facing away
+   * from the table: below for the lower half and the sides, above for the upper half
+   * (data-plate="above"), so plates never cover the felt or each other.
+   */
+  .seat {
+    position: absolute;
+    z-index: 3;
+    display: grid;
+    padding: 0;
+    color: #fff;
+    transform: translate(-50%, -50%);
+  }
+  /* translate and scale are their own properties, so they never fight the drop-in animation's transform */
+  .seat > .tok {
+    width: 3.25rem;
+    height: 3.25rem;
+    transition:
+      translate 200ms cubic-bezier(0.3, 1.5, 0.5, 1),
+      scale 200ms cubic-bezier(0.3, 1.5, 0.5, 1),
+      box-shadow 300ms,
+      var(--tilt-ease);
+  }
+  /* a soft shadow on the felt under each piece */
+  .seat > .tok::before {
+    content: '';
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    bottom: -9px;
+    z-index: -1;
+    height: 8px;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.28);
+    filter: blur(2px);
+  }
+  button.seat:hover > .tok {
+    translate: 0 -3px;
+  }
+  .seat-plate {
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: 50%;
+    display: grid;
+    justify-items: center;
+    width: max-content;
+    max-width: 6rem;
+    padding: 2px 0.55rem 3px;
+    transform: translateX(-50%);
+    border-radius: 0.6rem;
+    background: rgb(0 0 0 / 0.26);
+    line-height: 1.3;
+    transition: background-color 300ms, color 300ms;
+  }
+  .seat[data-plate='above'] .seat-plate {
+    top: auto;
+    bottom: calc(100% + 0.45rem);
+  }
+  .seat-name {
+    max-width: 5rem;
+    overflow: hidden;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .seat-balance {
+    max-width: 5.4rem;
+    overflow: hidden;
+    color: rgb(255 255 255 / 0.75);
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* the leader's crown sits on top of the piece, tipped slightly, like a hat */
+  .seat-crown {
+    position: absolute;
+    top: -0.95rem;
+    left: 50%;
+    z-index: 4;
+    transform: translateX(-50%) rotate(-8deg);
+  }
+  .seat[data-plate='above']:has(> .seat-crown) .seat-plate {
+    bottom: calc(100% + 1.15rem);
+  }
+  .seat-crown svg {
+    width: 1.4rem;
+    height: 1.4rem;
+    fill: var(--gold);
+    stroke: var(--gold-deep);
+    filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.3));
+  }
+  .seat[data-turn] > .tok {
+    box-shadow:
+      inset 0 0 0 3px rgb(255 255 255 / 0.35),
+      0 3px 0 rgb(0 0 0 / 0.28),
+      0 0 0 4px var(--felt),
+      0 0 0 7px var(--gold),
+      0 0 26px 6px rgb(255 197 61 / 0.45);
+  }
+  .seat[data-turn] .seat-plate {
+    background: var(--gold);
+    color: var(--gold-ink);
+  }
+  .seat[data-turn] .seat-balance {
+    color: var(--gold-ink);
+  }
+  .seat[data-out] {
+    opacity: 0.5;
+  }
+  .seat[data-empty] > .tok {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.25);
+    color: rgb(255 255 255 / 0.5);
+  }
+  .seat[data-empty] > .tok::before {
+    display: none;
+  }
+  .seat[data-empty] .seat-plate {
+    padding: 0.4rem 0.55rem;
+    background: rgb(0 0 0 / 0.14);
+  }
+  .seat-skel {
+    display: block;
+    width: 2.6rem;
+    height: 0.45rem;
+    border-radius: 9999px;
+    background: rgb(255 255 255 / 0.16);
+  }
+  .seat[data-arrived] > .tok {
+    animation: seat-drop 550ms cubic-bezier(0.2, 1.4, 0.4, 1);
+  }
+  .seat[data-me] > .tok {
+    width: 4rem;
+    height: 4rem;
+  }
+  .seat[data-draggable] > .tok {
+    cursor: grab;
+    touch-action: none;
+  }
+  .seat[data-draggable]:not([data-turn]) > .tok::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+    border: 2px dashed rgb(255 197 61 / 0.7);
+    animation: spin 14s linear infinite;
+  }
+  .table[data-dragging] .seat[data-drop] > .tok,
+  .table[data-dragging] [data-drop].bank-chip,
+  .table[data-dragging] [data-drop].pot-chip {
+    box-shadow: 0 0 0 4px rgb(255 197 61 / 0.35), 0 3px 0 rgb(0 0 0 / 0.28);
+  }
+  .table [data-over] > .tok,
+  .table [data-over].bank-chip,
+  .table [data-over].pot-chip {
+    scale: 1.18;
+    box-shadow: 0 0 0 5px var(--gold), 0 0 24px rgb(255 197 61 / 0.7);
+  }
+  .seat-float {
+    position: absolute;
+    top: -0.4rem;
+    left: 50%;
+    z-index: 5;
+    color: var(--gain-felt);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    white-space: nowrap;
+    text-shadow: 0 2px 0 rgb(0 0 0 / 0.3);
+    pointer-events: none;
+    animation: rise 1.4s ease-out forwards;
+  }
+  .seat-float[data-neg] {
+    color: var(--loss-felt);
+  }
+  /* the plate is above these pieces, so the amount rises from the middle of the piece instead */
+  .seat[data-plate='above'] > .seat-float {
+    top: 30%;
+  }
+  /* a gold coin flying across the table */
+  .coin {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 70;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    color: var(--gold-ink);
+    background: radial-gradient(circle at 35% 30%, #ffe9a8, var(--gold) 60%);
+    box-shadow: inset 0 0 0 3px rgb(255 255 255 / 0.55), 0 3px 0 var(--gold-deep), 0 8px 16px rgb(0 0 0 / 0.3);
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 800;
+    pointer-events: none;
+  }
+
+  /* ---------- balance chart ---------- */
+  .chart-line {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    transition: opacity 250ms;
+  }
+  .chart[data-focused] .chart-line:not([data-on]) {
+    opacity: 0.12;
+  }
+  .chart[data-focused] .chart-rider:not([data-on]) {
+    opacity: 0.25;
+  }
+  .chart-rider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: opacity 250ms;
+  }
+  .chart-rider > .tok {
+    box-shadow: 0 0 0 2px var(--felt-deep), 0 2px 0 rgb(0 0 0 / 0.3);
+  }
+
+  /* ---------- dialogs: bottom sheet on phones, centred card on larger screens ---------- */
+  dialog.sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - 2.5rem);
+    padding: 0;
+    border: 0;
+    border-radius: 1.6rem 1.6rem 0 0;
+    background: var(--paper);
+    color: var(--ink);
+    overflow: hidden;
+  }
+  dialog.sheet::backdrop {
+    background: var(--scrim);
+  }
+  dialog.sheet[open] {
+    display: flex;
+    flex-direction: column;
+    animation: sheet-up 300ms cubic-bezier(0.2, 1, 0.3, 1);
+  }
+  dialog.sheet[open]::backdrop {
+    animation: fade-in 220ms ease-out;
+  }
+  @media (min-width: 640px) {
+    dialog.sheet {
+      inset: 0;
+      margin: auto;
+      width: min(30rem, calc(100% - 2rem));
+      height: fit-content;
+      max-height: min(46rem, calc(100dvh - 4rem));
+      border-radius: 1.6rem;
+    }
+    dialog.sheet[open] {
+      animation: pop-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes tok-glint {
+  to { transform: translateX(120%); }
+}
+@keyframes seat-drop {
+  from { transform: translateY(-40px) scale(0.6); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes rise {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.8); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -30px); }
+}
+@keyframes bump {
+  40% { transform: scale(1.08); }
+}
+@keyframes tick {
+  0% { transform: translateY(-10px) scale(1.3); }
+}
+@keyframes glow {
+  50% { box-shadow: 0 0 0 6px rgb(255 197 61 / 0.2); }
+}
+@keyframes pulse-dot {
+  50% { box-shadow: 0 0 0 8px rgb(127 240 191 / 0); }
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-14px); }
+}
+@keyframes shake {
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes pop-in {
+  from { transform: translateY(10px) scale(0.96); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes toast-in {
+  from { transform: translateY(-16px) scale(0.9); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

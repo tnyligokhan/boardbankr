@@ -1,0 +1,37 @@
+# Runs the whole stack: the app and PostgreSQL.
+#   docker compose up -d --build   → http://localhost:3000
+# On Coolify you can deploy this file as a "Docker Compose" resource, or deploy the
+# Dockerfile as an application next to a Coolify-managed PostgreSQL (see README).
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://mdb:${POSTGRES_PASSWORD:-mdb}@db:5432/mdb
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - '3000:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mdb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mdb}
+      POSTGRES_DB: mdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mdb -d mdb']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
