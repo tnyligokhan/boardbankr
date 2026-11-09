@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
-import { Gavel } from 'lucide-react';
+import { Check, Gavel } from 'lucide-react';
 import {
   AMOUNT_MAX,
   AUCTION_TITLE_MAX,
@@ -13,7 +13,7 @@ import {
 import { FitText } from '../components/FitText';
 import { Sheet } from '../components/Sheet';
 import { Token } from '../components/Token';
-import { Button, Field, Segmented, TextInput } from '../components/ui';
+import { Button, Field, TextInput } from '../components/ui';
 import { buzz, sounds } from '../lib/fx';
 import { formatMoney, quickAmounts } from '../lib/format';
 import { useI18n } from '../lib/i18n';
@@ -355,21 +355,52 @@ export function DiceSheet({
         </Button>
       }
     >
-      <div className="flex flex-col items-center gap-5 pt-2 pb-1">
-        <div className="flex gap-4">
-          {Array.from({ length: count }, (_, i) => (
-            <Die key={i} value={i === 0 ? 5 : 3} size={72} />
-          ))}
-        </div>
-        <Segmented
-          label={t('dice')}
-          value={count}
-          onChange={(n) => {
-            buzz(8);
-            setCount(n);
-          }}
-          options={[1, 2].map((n) => ({ value: n, label: t('diceCount', { n }) }))}
-        />
+      <div role="radiogroup" aria-label={t('dice')} className="grid grid-cols-2 gap-3 pt-1 pb-1">
+        {([
+          { n: 1, title: t('diceOne'), range: '1–6', faces: [5] },
+          { n: 2, title: t('diceTwo'), range: '2–12', faces: [5, 3] },
+        ] as const).map((o) => {
+          const on = count === o.n;
+          return (
+            <button
+              key={o.n}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => {
+                buzz(8);
+                setCount(o.n);
+              }}
+              className={`relative flex flex-col overflow-hidden rounded-[1.25rem] bg-card text-left transition-[transform,box-shadow] hover:-translate-y-px ${
+                on ? 'shadow-[0_0_0_3px_var(--ink),0_4px_0_var(--ink)]' : 'shadow-[0_0_0_1.5px_var(--line),0_3px_0_var(--line)]'
+              }`}
+            >
+              {/* a patch of felt with the dice sitting on it */}
+              <span className="felt flex h-28 items-center justify-center gap-3">
+                {o.faces.map((v, i) => (
+                  <span key={i} className="relative block">
+                    <DieShadow size={44} />
+                    <span className="relative block" style={{ top: i === 0 ? -3 : 4 }}>
+                      <Die value={v} size={44} />
+                    </span>
+                  </span>
+                ))}
+              </span>
+              <span className="flex items-center gap-2 px-3.5 py-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block font-display text-[1.05rem] leading-tight font-bold">{o.title}</span>
+                  <span className="block text-sm font-semibold text-ink-2 tabular">{o.range}</span>
+                </span>
+                <span
+                  aria-hidden
+                  className={`grid size-[26px] shrink-0 place-items-center rounded-full ${on ? 'bg-ink text-paper' : 'shadow-[inset_0_0_0_2px_var(--line)]'}`}
+                >
+                  {on && <Check className="size-3.5" strokeWidth={3} />}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </Sheet>
   );
