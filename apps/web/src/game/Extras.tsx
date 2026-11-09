@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { Gavel } from 'lucide-react';
 import {
   AMOUNT_MAX,
@@ -82,14 +82,35 @@ function Pips({ value }: { value: number }) {
   );
 }
 
+/** How high a thrown die starts above the felt, in px. */
+const DROP = 110;
+/** Height of the die over the felt during the throw; the shadow is drawn from the same curve. */
+function hopFrames(): { y: number; offset: number; easing?: string }[] {
+  const [a, b, c, d] = IMPACTS as [number, number, number, number];
+  const fall = 'cubic-bezier(.5,0,1,1)';
+  const rise = 'cubic-bezier(0,0,.5,1)';
+  return [
+    { y: -DROP, offset: 0, easing: fall },
+    { y: 0, offset: a, easing: rise },
+    { y: -28, offset: (a + b) / 2, easing: fall },
+    { y: 0, offset: b, easing: rise },
+    { y: -11, offset: (b + c) / 2, easing: fall },
+    { y: 0, offset: c, easing: rise },
+    { y: -3, offset: (c + d) / 2, easing: fall },
+    { y: 0, offset: d },
+    { y: 0, offset: 1 },
+  ];
+}
+
 /**
- * A real cube, thrown: it drops in, bounces three times while it tumbles, and comes to rest
- * with `value` on top. It only exists while it moves; the resting die is the flat one, so it
- * stays sharp.
+ * A real cube, thrown onto the felt: it drops in, bounces three times while it tumbles, and
+ * comes to rest with `value` on top, its shadow tightening as it nears the table. It only
+ * exists while it moves; the resting die is the flat one, so it stays sharp.
  */
 function ThrownDie({ value, size, delay, onDone }: { value: number; size: number; delay: number; onDone: () => void }) {
   const hop = useRef<HTMLSpanElement>(null);
   const cube = useRef<HTMLSpanElement>(null);
+  const shadow = useRef<HTMLSpanElement>(null);
   const done = useRef(onDone);
   done.current = onDone;
 
@@ -100,76 +121,104 @@ function ThrownDie({ value, size, delay, onDone }: { value: number; size: number
     const mid = `rotateX(${fx + spin(1)}deg) rotateY(${fy + 180}deg) rotateZ(0deg)`;
     const to = `rotateX(${fx}deg) rotateY(${fy}deg) rotateZ(0deg)`;
     const timing = { duration: ROLL_MS, delay, fill: 'both' as const };
-    const [a, b, c, d] = IMPACTS;
+    const frames = hopFrames();
     const drop = hop.current?.animate(
-      [
-        { transform: 'translateY(-90px)', offset: 0, easing: 'cubic-bezier(.5,0,1,1)' },
-        { transform: 'translateY(0)', offset: a, easing: 'cubic-bezier(0,0,.5,1)' },
-        { transform: 'translateY(-26px)', offset: (a! + b!) / 2, easing: 'cubic-bezier(.5,0,1,1)' },
-        { transform: 'translateY(0)', offset: b, easing: 'cubic-bezier(0,0,.5,1)' },
-        { transform: 'translateY(-10px)', offset: (b! + c!) / 2, easing: 'cubic-bezier(.5,0,1,1)' },
-        { transform: 'translateY(0)', offset: c, easing: 'cubic-bezier(0,0,.5,1)' },
-        { transform: 'translateY(-3px)', offset: (c! + d!) / 2, easing: 'cubic-bezier(.5,0,1,1)' },
-        { transform: 'translateY(0)', offset: d },
-        { transform: 'translateY(0)', offset: 1 },
-      ],
+      frames.map((f) => ({ transform: `translateY(${f.y}px)`, offset: f.offset, easing: f.easing })),
+      timing,
+    );
+    const shade = shadow.current?.animate(
+      frames.map((f) => {
+        const lift = -f.y / DROP;
+        return { transform: `scale(${1 - lift * 0.55})`, opacity: 1 - lift * 0.75, offset: f.offset, easing: f.easing };
+      }),
       timing,
     );
     const turn = cube.current?.animate(
       [
         { transform: from, offset: 0 },
-        { transform: mid, offset: a },
+        { transform: mid, offset: IMPACTS[0] },
         { transform: to, offset: 0.88, easing: 'cubic-bezier(.2,.8,.3,1)' },
         { transform: to, offset: 1 },
       ],
       { ...timing, easing: 'cubic-bezier(.3,.1,.3,1)' },
     );
     let live = true;
-    void Promise.all([drop?.finished, turn?.finished])
+    const finish = () => {
+      if (!live) return;
+      live = false;
+      done.current();
+    };
+    void Promise.all([drop?.finished, turn?.finished, shade?.finished])
       .catch(() => undefined)
-      .then(() => live && done.current());
+      .then(finish);
+    // a phone that sleeps mid-throw may never report the end: land it anyway
+    const fallback = setTimeout(finish, ROLL_MS + delay + 600);
     return () => {
       live = false;
+      clearTimeout(fallback);
       drop?.cancel();
       turn?.cancel();
+      shade?.cancel();
     };
   }, [value, delay]);
 
   const half = size / 2;
   return (
-    <span aria-hidden className="block" style={{ width: size, height: size, perspective: size * 9 }}>
-      <span ref={hop} className="block size-full">
-        <span ref={cube} className="relative block size-full" style={{ transformStyle: 'preserve-3d' }}>
-          {FACE_PLACE.map(([face, place]) => (
-            <span
-              key={face}
-              className="absolute inset-0 grid grid-cols-3 grid-rows-3 rounded-[20%] [backface-visibility:hidden]"
-              style={{
-                transform: `${place} translateZ(${half}px)`,
-                padding: size * 0.16,
-                background: DIE_FACE,
-                // a faint edge so the cube reads as solid while it turns
-                boxShadow: 'inset 0 0 0 2px var(--line), inset 0 -6px 10px rgb(0 0 0 / 0.06)',
-              }}
-            >
-              <Pips value={face} />
-            </span>
-          ))}
+    <span aria-hidden className="relative block" style={{ width: size, height: size }}>
+      <DieShadow ref={shadow} size={size} />
+      {/* the perspective and the 3D space run through every layer, or some browsers flatten the cube and hide its faces */}
+      <span className="block size-full" style={{ perspective: size * 9, transformStyle: 'preserve-3d' }}>
+        <span ref={hop} className="block size-full" style={{ transformStyle: 'preserve-3d' }}>
+          <span ref={cube} className="relative block size-full" style={{ transformStyle: 'preserve-3d' }}>
+            {FACE_PLACE.map(([face, place]) => (
+              <span
+                key={face}
+                className="absolute inset-0 grid grid-cols-3 grid-rows-3 rounded-[20%]"
+                style={{
+                  transform: `${place} translateZ(${half}px)`,
+                  padding: size * 0.16,
+                  background: DIE_FACE,
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  // a faint edge so the cube reads as solid while it turns
+                  boxShadow: 'inset 0 0 0 2px var(--line), inset 0 -6px 10px rgb(0 0 0 / 0.06)',
+                }}
+              >
+                <Pips value={face} />
+              </span>
+            ))}
+          </span>
         </span>
       </span>
     </span>
   );
 }
 
+/** The soft dark patch a die casts on the felt. */
+const DieShadow = forwardRef<HTMLSpanElement, { size: number }>(function DieShadow({ size }, ref) {
+  return (
+    <span
+      ref={ref}
+      aria-hidden
+      className="absolute left-1/2 rounded-[50%] bg-black/45 blur-[5px]"
+      style={{ width: size * 0.95, height: size * 0.3, top: size * 0.86, marginLeft: -(size * 0.95) / 2 }}
+    />
+  );
+});
+
+const DIE_SIZE = 58;
+
 /**
- * Shows every roll at the table to everyone: the dice tumble for a moment, then land on what
- * the server rolled. Tapping it, or waiting, puts it away.
+ * Every roll at the table lands on the felt in the middle of it, on every phone: the dice are
+ * thrown, bounce, and settle on what the server rolled, with a small label for who rolled and
+ * the total. It fades away by itself; nothing to tap, so a stray touch can't lose a roll.
  */
 export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRoll | null; players: PlayerView[]; meId: string; onRollAgain: () => void }) {
   const { t } = useI18n();
   const seen = useRef(roll?.seq ?? 0);
   const [shown, setShown] = useState<DiceRoll | null>(null);
   const [rolling, setRolling] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const landed = useRef(0);
 
   // keyed on the roll number: later snapshots carry the same roll and must not restart it
@@ -182,6 +231,7 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
     seen.current = seq;
     landed.current = 0;
     setShown(roll);
+    setLeaving(false);
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setRolling(!still);
     buzz(12);
@@ -190,17 +240,22 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
       380,
       roll.dice.map((_, i) => IMPACTS.map((f) => (i * DIE_DELAY_MS + f * ROLL_MS) / 1000)),
     );
+    const fade = setTimeout(() => setLeaving(true), ROLL_MS + SHOW_MS - 400);
     const hide = setTimeout(() => setShown(null), ROLL_MS + SHOW_MS);
-    return () => clearTimeout(hide);
+    return () => {
+      clearTimeout(fade);
+      clearTimeout(hide);
+    };
   }, [seq]);
 
-  const onDieDone = () => {
+  const count = shown?.dice.length ?? 0;
+  const onDieDone = useCallback(() => {
     landed.current++;
-    if (shown && landed.current >= shown.dice.length) {
+    if (landed.current >= count) {
       setRolling(false);
       buzz(25);
     }
-  };
+  }, [count]);
 
   if (!shown) return null;
   const who = players.find((p) => p.userId === shown.userId);
@@ -209,42 +264,44 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
   const double = shown.dice.length === 2 && shown.dice[0] === shown.dice[1];
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex justify-center px-4">
-      <div
-        role="status"
-        aria-live="polite"
-        className="pointer-events-auto flex w-full max-w-xs flex-col items-center gap-3 rounded-[1.6rem] bg-paper px-5 pt-4 pb-4 text-ink shadow-[0_0_0_1.5px_var(--line),0_6px_0_var(--line),0_18px_40px_rgb(0_0_0/0.35)]"
-        style={{ animation: 'pop-in 300ms cubic-bezier(0.2, 1.4, 0.4, 1)' }}
-        onClick={() => setShown(null)}
-      >
-        <p className="flex items-center gap-2 text-sm font-bold text-ink-2">
-          {who && <Token color={who.color} token={who.token} size={24} />}
-          {mine ? t('diceYouRolled') : t('diceRolledBy', { name: who?.name ?? '' })}
-        </p>
-        <div className="flex h-[68px] gap-5">
+    <div
+      role="status"
+      aria-live="polite"
+      className={`pointer-events-none absolute inset-0 z-30 grid place-items-center transition-opacity duration-400 ${leaving ? 'opacity-0' : 'opacity-100'}`}
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex gap-6" style={{ height: DIE_SIZE }}>
           {shown.dice.map((v, i) =>
             rolling ? (
-              <ThrownDie key={`${shown.seq}-${i}`} value={v} size={68} delay={i * DIE_DELAY_MS} onDone={onDieDone} />
+              <ThrownDie key={`${shown.seq}-${i}`} value={v} size={DIE_SIZE} delay={i * DIE_DELAY_MS} onDone={onDieDone} />
             ) : (
-              <Die key={i} value={v} size={68} />
+              <span key={`${shown.seq}-${i}`} className="relative block">
+                <DieShadow size={DIE_SIZE} />
+                <span className="relative block">
+                  <Die value={v} size={DIE_SIZE} />
+                </span>
+              </span>
             ),
           )}
         </div>
-        <p className="h-7 font-display text-xl font-extrabold tabular" aria-hidden={rolling}>
-          {rolling ? '' : double ? `${t('diceTotal', { n: total })} · ${t('diceDouble')}` : t('diceTotal', { n: total })}
-        </p>
-        {mine && !rolling && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRollAgain();
-            }}
-            className="rounded-lg px-2 py-1 text-sm font-bold text-gain hover:bg-sand"
-          >
-            {t('rollAgain')}
-          </button>
-        )}
+        <div
+          className={`flex h-10 items-center gap-2 rounded-full bg-black/45 pr-1.5 pl-1 text-sm font-bold text-white shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.12)] backdrop-blur-sm transition-opacity duration-300 ${rolling ? 'opacity-0' : 'opacity-100'}`}
+        >
+          {who && <Token color={who.color} token={who.token} size={30} />}
+          <span className="pr-2">
+            {mine ? t('diceYou') : who?.name} · <span className="font-display tabular">{t('diceTotal', { n: total })}</span>
+            {double && <span className="text-gold"> · {t('diceDouble')}</span>}
+          </span>
+          {mine && !rolling && (
+            <button
+              type="button"
+              onClick={onRollAgain}
+              className="pointer-events-auto h-8 rounded-full bg-gold px-3 font-display text-xs font-bold text-gold-ink shadow-[0_2px_0_var(--gold-deep)]"
+            >
+              {t('rollAgain')}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -299,7 +299,7 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
 
           {!imIn && <p className="mt-3 shrink-0 rounded-2xl bg-black/22 px-4 py-3 text-center text-[0.95rem] text-white/80">{t('outBanner')}</p>}
 
-          <div className="table-fit">
+          <div className="table-fit relative">
             <RoundTable
               ref={table}
               seats={seats}
@@ -335,6 +335,8 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
                 </>
               }
             />
+            {/* every roll lands here, on the felt in the middle of the table */}
+            <DiceOverlay roll={game.lastRoll} players={game.players} meId={meId} onRollAgain={() => void rollDice()} />
           </div>
           {imIn && <p className="game-hint shrink-0 text-center text-[0.82rem] text-white/55">{t('dragHint')}</p>}
 
@@ -457,7 +459,6 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
 
       <PaySheet mode={pay} game={game} me={me} act={act} onClose={() => setPay(null)} undoAction={undoLastAction} />
 
-      <DiceOverlay roll={game.lastRoll} players={game.players} meId={meId} onRollAgain={() => void rollDice()} />
       <DiceSheet open={diceOpen} onClose={() => setDiceOpen(false)} count={diceCount} setCount={setDiceCount} onRoll={rollDice} />
       <AuctionStartSheet open={auctionStartOpen} onClose={() => setAuctionStartOpen(false)} game={game} start={startAuction} />
       <AuctionSheet open={auctionOpen} onClose={() => setAuctionOpen(false)} game={game} me={me} left={auctionLeft} bid={bid} cancel={cancelAuction} />
