@@ -350,25 +350,19 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
                   <FitText className="min-w-0 text-right tabular">+{money(game.salary)}</FitText>
                 </Button>
               )}
-              <Button variant="glass" onClick={() => setPay({ kind: 'take' })}>
-                <ArrowDownLeft aria-hidden className="size-4" />
-                {t('fromBank')}
-              </Button>
-              <Button variant="glass" onClick={() => setPay({ kind: 'pay', to: 'bank' })}>
-                <ArrowUpRight aria-hidden className="size-4" />
-                {t('toBank')}
-              </Button>
-              <Button variant="glass" onClick={() => setDiceOpen(true)}>
-                <Dices aria-hidden className="size-4" />
-                {t('rollDice')}
-              </Button>
-              <Button
-                variant="glass"
-                onClick={() => (auction?.status === 'open' ? setAuctionOpen(true) : setAuctionStartOpen(true))}
-              >
-                <Gavel aria-hidden className="size-4" />
-                {t('auction')}
-              </Button>
+              {/* the smaller moves share one row, so the table keeps its room */}
+              <div className="col-span-2 grid grid-cols-5 gap-1.5">
+                <ToolTile icon={ArrowDownLeft} label={t('toolTake')} onClick={() => setPay({ kind: 'take' })} />
+                <ToolTile icon={ArrowUpRight} label={t('toolPay')} onClick={() => setPay({ kind: 'pay', to: 'bank' })} />
+                <ToolTile icon={Dices} label={t('toolDice')} onClick={() => setDiceOpen(true)} />
+                <ToolTile
+                  icon={Gavel}
+                  label={t('toolAuction')}
+                  live={auction?.status === 'open'}
+                  onClick={() => (auction?.status === 'open' ? setAuctionOpen(true) : setAuctionStartOpen(true))}
+                />
+                <ToolTile icon={Flag} label={t('toolBankrupt')} danger onClick={() => setBankruptOpen(true)} />
+              </div>
               {game.freeParkingEnabled && game.freeParkingPot > 0 && (
                 <Button
                   variant="glass"
@@ -503,6 +497,32 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
         onConfirm={() => confirm?.kind === 'skip' && runConfirm(() => skipTurn(confirm.player.userId))}
       />
     </div>
+  );
+}
+
+/** A compact key on the felt: icon over a short label. Five fit across a phone. */
+function ToolTile({
+  icon: Icon,
+  label,
+  onClick,
+  danger,
+  live,
+}: {
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  live?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`tool-tile ${live ? 'bg-gold text-gold-ink shadow-[0_3px_0_var(--gold-deep)]' : danger ? 'text-loss-felt' : 'text-white'}`}
+    >
+      <Icon aria-hidden className="size-5" />
+      <span className="line-clamp-2 max-w-full px-0.5 text-center text-[0.72rem] leading-[1.1] font-bold">{label}</span>
+    </button>
   );
 }
 

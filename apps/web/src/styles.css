@@ -418,6 +418,26 @@
     min-height: 38rem;
     padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
   }
+  /* the row of small moves under the main buttons: icon over a short label, glass on the felt */
+  .tool-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    min-width: 0;
+    height: 3.6rem;
+    border-radius: 1rem;
+    background: rgb(255 255 255 / 0.1);
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.16), 0 3px 0 rgb(0 0 0 / 0.18);
+    transition: translate 120ms, background-color 150ms;
+  }
+  .tool-tile:hover {
+    background: rgb(255 255 255 / 0.16);
+  }
+  .tool-tile:active {
+    translate: 0 2px;
+  }
   .table-fit {
     display: grid;
     flex: 1 1 0;
@@ -443,6 +463,9 @@
       height: 2.75rem;
     }
     .game-screen .btn-lg {
+      height: 3.1rem;
+    }
+    .game-screen .tool-tile {
       height: 3.1rem;
     }
   }
