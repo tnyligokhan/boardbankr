@@ -29,7 +29,7 @@ export function GameTopBar({ code, connection: raw, center, right }: { code: str
   const connection = useVisibleConnection(raw);
   return (
     <>
-      <header className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-2 pt-safe sm:px-4">
+      <header className="mx-auto flex h-16 w-full max-w-6xl items-center gap-2 px-2 pt-safe sm:px-4">
         <Link to="/app" aria-label={t('back')} className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl hover:bg-white/10">
           <ArrowLeft aria-hidden className="size-5" />
         </Link>
