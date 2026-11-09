@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, Gavel } from 'lucide-react';
 import {
   AMOUNT_MAX,
@@ -114,7 +114,8 @@ function ThrownDie({ value, size, delay, onDone }: { value: number; size: number
   const done = useRef(onDone);
   done.current = onDone;
 
-  useEffect(() => {
+  // before the first paint, so the die never shows for a frame where it will land
+  useLayoutEffect(() => {
     const [fx, fy] = FACE_TURN[value] ?? [0, 0];
     const spin = (n: number) => 360 * n * (Math.random() < 0.5 ? -1 : 1);
     const from = `rotateX(${spin(2) + Math.random() * 90}deg) rotateY(${spin(1) + Math.random() * 90}deg) rotateZ(${Math.random() * 60 - 30}deg)`;
@@ -219,6 +220,7 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
   const [shown, setShown] = useState<DiceRoll | null>(null);
   const [rolling, setRolling] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [rerolled, setRerolled] = useState(0);
   const landed = useRef(0);
 
   // keyed on the roll number: later snapshots carry the same roll and must not restart it
@@ -284,22 +286,33 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
             ),
           )}
         </div>
-        <div
-          className={`flex h-10 items-center gap-2 rounded-full bg-black/45 pr-1.5 pl-1 text-sm font-bold text-white shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.12)] backdrop-blur-sm transition-opacity duration-300 ${rolling ? 'opacity-0' : 'opacity-100'}`}
-        >
-          {who && <Token color={who.color} token={who.token} size={30} />}
-          <span className="pr-2">
-            {mine ? t('diceYou') : who?.name} · <span className="font-display tabular">{t('diceTotal', { n: total })}</span>
-            {double && <span className="text-gold"> · {t('diceDouble')}</span>}
-          </span>
-          {mine && !rolling && (
-            <button
-              type="button"
-              onClick={onRollAgain}
-              className="pointer-events-auto h-8 rounded-full bg-gold px-3 font-display text-xs font-bold text-gold-ink shadow-[0_2px_0_var(--gold-deep)]"
+        {/* the result only exists once the dice have landed: no fading text that could give it away early */}
+        <div className="h-10">
+          {!rolling && (
+            <div
+              className="flex h-10 items-center gap-2 rounded-full bg-black/45 pr-1.5 pl-1 text-sm font-bold text-white shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.12)] backdrop-blur-sm"
+              style={{ animation: 'fade-in 250ms ease-out' }}
             >
-              {t('rollAgain')}
-            </button>
+              {who && <Token color={who.color} token={who.token} size={30} />}
+              <span className="pr-2">
+                {mine ? t('diceYou') : who?.name} · <span className="font-display tabular">{t('diceTotal', { n: total })}</span>
+                {double && <span className="text-gold"> · {t('diceDouble')}</span>}
+              </span>
+              {mine && (
+                <button
+                  type="button"
+                  disabled={rerolled === shown.seq}
+                  onClick={() => {
+                    // one tap, one throw: the button waits for the next roll to arrive
+                    setRerolled(shown.seq);
+                    onRollAgain();
+                  }}
+                  className="pointer-events-auto h-8 rounded-full bg-gold px-3 font-display text-xs font-bold text-gold-ink shadow-[0_2px_0_var(--gold-deep)] disabled:opacity-60"
+                >
+                  {t('rollAgain')}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -87,7 +87,7 @@ export function StartForm({ next = '/app' }: { next?: string }) {
         <Link to="/new" className={buttonClass('gold', 'lg')}>
           {t('heroCreate')}
         </Link>
-        <form onSubmit={join} className="flex h-[3.6rem] min-w-0 flex-1 items-center rounded-2xl bg-white/12 shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.22)] focus-within:shadow-[inset_0_0_0_2px_var(--gold)]">
+        <form onSubmit={join} className="flex h-[3.6rem] w-full min-w-0 shrink-0 items-center rounded-2xl sm:w-auto sm:flex-1 bg-white/12 shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.22)] focus-within:shadow-[inset_0_0_0_2px_var(--gold)]">
           <label htmlFor="landing-code" className="sr-only">
             {t('codePlaceholder')}
           </label>
@@ -142,7 +142,7 @@ export function StartForm({ next = '/app' }: { next?: string }) {
           autoComplete="nickname"
           enterKeyHint="go"
           aria-invalid={Boolean(error) || undefined}
-          className="h-[3.6rem] min-w-0 flex-1 rounded-2xl bg-white/12 px-4 text-[1.05rem] font-semibold text-white shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.22)] placeholder:text-white/50 focus:shadow-[inset_0_0_0_2px_var(--gold)] focus:outline-none"
+          className="h-[3.6rem] w-full min-w-0 shrink-0 rounded-2xl bg-white/12 px-4 sm:w-auto sm:flex-1 text-[1.05rem] font-semibold text-white shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.22)] placeholder:text-white/50 focus:shadow-[inset_0_0_0_2px_var(--gold)] focus:outline-none"
         />
         <Button type="submit" size="lg" busy={busy}>
           {t('heroSit')}
