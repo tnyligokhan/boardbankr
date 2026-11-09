@@ -22,7 +22,8 @@ export const PLAYER_ACTION_KINDS = [
 ] as const;
 export type PlayerActionKind = (typeof PLAYER_ACTION_KINDS)[number];
 
-export type TransactionKind = PlayerActionKind | 'bankruptcy' | 'leave';
+/** 'reversal' undoes an earlier payment; 'auction' is the winning bid paid to the bank. */
+export type TransactionKind = PlayerActionKind | 'bankruptcy' | 'leave' | 'reversal' | 'auction';
 
 export interface PlayerView {
   userId: string;
@@ -52,7 +53,47 @@ export interface TransactionView {
   fromUserId: string | null;
   toUserId: string | null;
   amount: number;
+  /** For a reversal: the payment it undid. */
+  reversesTxId: number | null;
+  /** Free text that came with it, such as what an auction sold. */
+  note: string | null;
   createdAt: string;
+}
+
+/** The last dice roll at the table; `seq` goes up by one with every roll. */
+export interface DiceRoll {
+  seq: number;
+  userId: string;
+  dice: number[];
+  at: string;
+}
+
+export interface AuctionBid {
+  userId: string;
+  amount: number;
+  at: string;
+}
+
+export type AuctionStatus = 'open' | 'sold' | 'unsold' | 'cancelled';
+
+/**
+ * The current or most recent auction. Bids only go up, so the last bid is the highest.
+ * The server decides when it ends; `remainingMs` is measured when the snapshot is made,
+ * so phones with a wrong clock still count down correctly.
+ */
+export interface AuctionView {
+  id: string;
+  title: string;
+  startedBy: string;
+  minBid: number;
+  status: AuctionStatus;
+  bids: AuctionBid[];
+  startedAt: string;
+  endsAt: string;
+  remainingMs: number;
+  /** Set once sold. */
+  winnerUserId: string | null;
+  price: number | null;
 }
 
 export interface GameSnapshot {
@@ -73,6 +114,8 @@ export interface GameSnapshot {
   turnUserId: string | null;
   /** Oldest first. Drives the balance chart. */
   rounds: RoundRecord[];
+  lastRoll: DiceRoll | null;
+  auction: AuctionView | null;
   version: number;
   createdAt: string;
   startedAt: string | null;

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowLeft, Landmark, WifiOff } from 'lucide-react';
-import type { GameSnapshot, PlayerView, TransactionView } from '@mdb/shared';
+import { reversedIds, type GameSnapshot, type PlayerView, type TransactionView } from '@mdb/shared';
 import { useI18n } from '../lib/i18n';
 import { describeTx, deltaFor } from '../lib/describe';
 import { formatMoney, formatTime } from '../lib/format';
@@ -75,6 +75,12 @@ export function ParkingBadge({ size = 34 }: { size?: number }) {
   );
 }
 
+/** Whether money went into or out of the free parking pot, also for the undo of such a payment. */
+export function touchesParking(tx: TransactionView, game: GameSnapshot): boolean {
+  const kind = tx.kind === 'reversal' ? game.transactions.find((x) => x.id === tx.reversesTxId)?.kind : tx.kind;
+  return kind === 'player_to_parking' || kind === 'parking_to_player';
+}
+
 /** Whose piece to show next to a payment: the other side of it from me, or whoever paid. */
 function counterpart(tx: TransactionView, game: GameSnapshot, meId: string): PlayerView | 'bank' | 'parking' {
   const ids = tx.fromUserId === meId ? [tx.toUserId] : tx.toUserId === meId ? [tx.fromUserId] : [tx.fromUserId, tx.toUserId];
@@ -82,10 +88,29 @@ function counterpart(tx: TransactionView, game: GameSnapshot, meId: string): Pla
     const p = id && game.players.find((x) => x.userId === id);
     if (p) return p;
   }
-  return tx.kind === 'player_to_parking' || tx.kind === 'parking_to_player' ? 'parking' : 'bank';
+  return touchesParking(tx, game) ? 'parking' : 'bank';
 }
 
-export function ActivityItem({ tx, game, meId }: { tx: TransactionView; game: GameSnapshot; meId: string }) {
+/** Undo controls for the activity list: who may undo what, and doing it. */
+export interface UndoControls {
+  can: (tx: TransactionView) => boolean;
+  run: (tx: TransactionView) => void;
+  busyId: number | null;
+}
+
+export function ActivityItem({
+  tx,
+  game,
+  meId,
+  reversed,
+  undo,
+}: {
+  tx: TransactionView;
+  game: GameSnapshot;
+  meId: string;
+  reversed?: boolean;
+  undo?: UndoControls;
+}) {
   const { t, locale } = useI18n();
   const delta = deltaFor(tx, meId);
   const who = counterpart(tx, game, meId);
@@ -94,10 +119,23 @@ export function ActivityItem({ tx, game, meId }: { tx: TransactionView; game: Ga
       {who === 'bank' ? <BankBadge /> : who === 'parking' ? <ParkingBadge /> : <Token color={who.color} token={who.token} size={34} muted={who.status !== 'active'} />}
       <div className="min-w-0 flex-1">
         <p className="line-clamp-2 text-[0.95rem] leading-snug font-bold">{describeTx(tx, game, t)}</p>
-        <p className="text-[0.8rem] text-ink-3 tabular">{formatTime(tx.createdAt, locale)}</p>
+        <p className="flex flex-wrap items-center gap-x-2 text-[0.8rem] text-ink-3 tabular">
+          {formatTime(tx.createdAt, locale)}
+          {reversed && <span className="rounded-full bg-sand px-2 font-bold text-ink-2">{t('undoneTag')}</span>}
+          {!reversed && undo?.can(tx) && (
+            <button
+              type="button"
+              disabled={undo.busyId === tx.id}
+              onClick={() => undo.run(tx)}
+              className="-my-1 rounded-md px-1.5 py-1 font-bold text-gain hover:bg-sand disabled:opacity-50"
+            >
+              {t('undo')}
+            </button>
+          )}
+        </p>
       </div>
       <FitText
-        className={`max-w-[45%] text-right font-display text-[0.95rem] font-bold tabular ${delta > 0 ? 'text-gain' : delta < 0 ? 'text-loss' : 'text-ink-2'}`}
+        className={`max-w-[45%] text-right font-display text-[0.95rem] font-bold tabular ${reversed ? 'text-ink-3 line-through' : delta > 0 ? 'text-gain' : delta < 0 ? 'text-loss' : 'text-ink-2'}`}
       >
         {delta > 0 ? '+' : delta < 0 ? '−' : ''}
         {formatMoney(tx.amount, game.currency, locale)}
@@ -106,14 +144,15 @@ export function ActivityItem({ tx, game, meId }: { tx: TransactionView; game: Ga
   );
 }
 
-export function ActivityList({ game, meId, limit }: { game: GameSnapshot; meId: string; limit?: number }) {
+export function ActivityList({ game, meId, limit, undo }: { game: GameSnapshot; meId: string; limit?: number; undo?: UndoControls }) {
   const { t } = useI18n();
+  const reversed = reversedIds(game.transactions);
   const items = limit ? game.transactions.slice(0, limit) : game.transactions;
   if (items.length === 0) return <p className="py-3 text-ink-2">{t('noActivity')}</p>;
   return (
     <ul className="divide-y-[1.5px] divide-sand">
       {items.map((tx) => (
-        <ActivityItem key={tx.id} tx={tx} game={game} meId={meId} />
+        <ActivityItem key={tx.id} tx={tx} game={game} meId={meId} reversed={reversed.has(tx.id)} undo={undo} />
       ))}
     </ul>
   );

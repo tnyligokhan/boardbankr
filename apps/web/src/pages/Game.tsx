@@ -109,6 +109,12 @@ export default function Game() {
         leave={g.leave}
         endTurn={g.endTurn}
         skipTurn={g.skipTurn}
+        undo={g.undo}
+        roll={g.roll}
+        startAuction={g.startAuction}
+        bid={g.bid}
+        cancelAuction={g.cancelAuction}
+        settleAuction={g.settleAuction}
       />
     );
   }

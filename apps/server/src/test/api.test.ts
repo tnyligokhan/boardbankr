@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLAYER_TOKENS, type GameSnapshot } from '@mdb/shared';
 import { PUBLIC_URL, createTestApp, guest } from './helpers';
 
@@ -425,5 +425,152 @@ describe('game pieces', () => {
     const g = (await bora.call('POST', `/api/games/${code}/token`, { token: free })).body.game!;
     expect(g.players.find((p) => p.userId === bora.id)!.token).toBe(free);
     expect((await bora.call('POST', `/api/games/${code}/token`, { token: 'unicorn' })).status).toBe(400);
+  });
+});
+
+type Player = Awaited<ReturnType<typeof guest>>;
+
+describe('undo', () => {
+  const pay = (p: Player, code: string, toUserId: string, amount: number) =>
+    p.call('POST', `/api/games/${code}/actions`, { clientTxId: txId(), action: { kind: 'player_to_player', toUserId, amount } });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('sends a payment back, records it, and only once', async () => {
+    const { code, players } = await startedGame();
+    const [ada, bora] = players as [Player, Player, Player];
+    const paid = await pay(bora, code, ada.id, 300);
+    const paidId = paid.body.game!.transactions[0]!.id;
+
+    const undone = await bora.call('POST', `/api/games/${code}/undo`, { txId: paidId });
+    expect(undone.status).toBe(200);
+    const g = undone.body.game!;
+    expect(balance(g, ada.id)).toBe(1500);
+    expect(balance(g, bora.id)).toBe(1500);
+    expect(g.transactions[0]).toMatchObject({ kind: 'reversal', reversesTxId: paidId, fromUserId: ada.id, toUserId: bora.id, amount: 300 });
+
+    // a second undo of the same payment changes nothing
+    const again = await bora.call('POST', `/api/games/${code}/undo`, { txId: paidId });
+    expect(again.status).toBe(200);
+    expect(again.body.game!.transactions.filter((t) => t.kind === 'reversal')).toHaveLength(1);
+  });
+
+  it('lets the payer undo for two minutes and the host at any time', async () => {
+    const { code, players } = await startedGame();
+    const [ada, bora, cem] = players as [Player, Player, Player];
+    const paidId = (await pay(bora, code, cem.id, 100)).body.game!.transactions[0]!.id;
+
+    // another player who is not the host cannot undo it
+    expect((await cem.call('POST', `/api/games/${code}/undo`, { txId: paidId })).body.error).toBe('undo_unavailable');
+
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3 * 60 * 1000 });
+    expect((await bora.call('POST', `/api/games/${code}/undo`, { txId: paidId })).body.error).toBe('undo_unavailable');
+    const host = await ada.call('POST', `/api/games/${code}/undo`, { txId: paidId });
+    expect(host.status).toBe(200);
+    expect(balance(host.body.game!, bora.id)).toBe(1500);
+  });
+
+  it('refuses when the receiver no longer has the money', async () => {
+    const { code, players } = await startedGame();
+    const [ada, bora, cem] = players as [Player, Player, Player];
+    const paidId = (await pay(bora, code, ada.id, 1000)).body.game!.transactions[0]!.id;
+    await pay(ada, code, cem.id, 2400);
+    const res = await bora.call('POST', `/api/games/${code}/undo`, { txId: paidId });
+    expect(res.body.error).toBe('undo_insufficient');
+  });
+
+  it('cannot undo a bankruptcy', async () => {
+    const { code, players } = await startedGame();
+    const [ada, bora] = players as [Player, Player, Player];
+    const out = await bora.call('POST', `/api/games/${code}/actions`, { clientTxId: txId(), action: { kind: 'bankruptcy', creditorUserId: null } });
+    const id = out.body.game!.transactions[0]!.id;
+    expect((await ada.call('POST', `/api/games/${code}/undo`, { txId: id })).body.error).toBe('undo_unavailable');
+  });
+});
+
+describe('dice', () => {
+  it('rolls on the server and shows the same roll to the table', async () => {
+    const { code, players } = await startedGame();
+    const [ada, bora] = players as [Player, Player, Player];
+    const first = await ada.call('POST', `/api/games/${code}/roll`, { count: 2 });
+    expect(first.status).toBe(200);
+    const roll = first.body.game!.lastRoll!;
+    expect(roll).toMatchObject({ seq: 1, userId: ada.id });
+    expect(roll.dice).toHaveLength(2);
+    for (const d of roll.dice) expect(d >= 1 && d <= 6).toBe(true);
+
+    const second = await bora.call('POST', `/api/games/${code}/roll`, { count: 1 });
+    expect(second.body.game!.lastRoll).toMatchObject({ seq: 2, userId: bora.id });
+    expect(second.body.game!.lastRoll!.dice).toHaveLength(1);
+    expect((await bora.call('POST', `/api/games/${code}/roll`, { count: 3 })).status).toBe(400);
+  });
+});
+
+describe('auction', () => {
+  afterEach(() => vi.useRealTimers());
+
+  async function openAuction(minBid = 50) {
+    const s = await startedGame();
+    const res = await s.players[0]!.call('POST', `/api/games/${s.code}/auction`, { title: '  Bağdat   Caddesi ', minBid });
+    expect(res.status).toBe(200);
+    return { ...s, players: s.players as [Player, Player, Player], auction: res.body.game!.auction! };
+  }
+
+  it('takes rising bids and sells to the highest one when time is up', async () => {
+    const { code, players, auction } = await openAuction();
+    const [ada, bora, cem] = players;
+    expect(auction).toMatchObject({ title: 'Bağdat Caddesi', status: 'open', minBid: 50 });
+    const bid = (p: Player, amount: number) => p.call('POST', `/api/games/${code}/auction/bid`, { auctionId: auction.id, amount });
+
+    expect((await bid(bora, 40)).body.error).toBe('bid_too_low');
+    expect((await bid(bora, 60)).status).toBe(200);
+    expect((await bid(bora, 60)).status).toBe(200); // the same bid again is not an error
+    expect((await bid(cem, 60)).body.error).toBe('bid_too_low');
+    expect((await bid(cem, 5000)).body.error).toBe('insufficient_funds');
+    const last = await bid(cem, 120);
+    expect(last.body.game!.auction!.bids).toHaveLength(2);
+
+    // not over yet: settling early changes nothing
+    const early = await ada.call('POST', `/api/games/${code}/auction/settle`, { auctionId: auction.id });
+    expect(early.body.game!.auction!.status).toBe('open');
+
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 60_000 });
+    expect((await bid(bora, 200)).body.error).toBe('auction_closed');
+    const done = await ada.call('POST', `/api/games/${code}/auction/settle`, { auctionId: auction.id });
+    const g = done.body.game!;
+    expect(g.auction).toMatchObject({ status: 'sold', winnerUserId: cem.id, price: 120 });
+    expect(balance(g, cem.id)).toBe(1380);
+    expect(g.transactions[0]).toMatchObject({ kind: 'auction', fromUserId: cem.id, toUserId: null, amount: 120, note: 'Bağdat Caddesi' });
+  });
+
+  it('passes over a winner who can no longer pay', async () => {
+    const { code, players, auction } = await openAuction(10);
+    const [ada, bora, cem] = players;
+    await bora.call('POST', `/api/games/${code}/auction/bid`, { auctionId: auction.id, amount: 100 });
+    await cem.call('POST', `/api/games/${code}/auction/bid`, { auctionId: auction.id, amount: 1400 });
+    await cem.call('POST', `/api/games/${code}/actions`, { clientTxId: txId(), action: { kind: 'player_to_bank', amount: 500 } });
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 60_000 });
+    const g = (await ada.call('POST', `/api/games/${code}/auction/settle`, { auctionId: auction.id })).body.game!;
+    expect(g.auction).toMatchObject({ status: 'sold', winnerUserId: bora.id, price: 100 });
+  });
+
+  it('ends unsold without bids, allows one auction at a time, and can be cancelled', async () => {
+    const { code, players, auction } = await openAuction();
+    const [ada, bora, cem] = players;
+    expect((await bora.call('POST', `/api/games/${code}/auction`, { title: '', minBid: 0 })).body.error).toBe('auction_running');
+    expect((await cem.call('POST', `/api/games/${code}/auction/cancel`, { auctionId: auction.id })).body.error).toBe('not_host');
+
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 60_000 });
+    // an expired auction is settled before a new one opens
+    const next = await bora.call('POST', `/api/games/${code}/auction`, { title: '', minBid: 0 });
+    expect(next.status).toBe(200);
+    const fresh = next.body.game!.auction!;
+    expect(fresh.id).not.toBe(auction.id);
+    expect(fresh.status).toBe('open');
+    vi.useRealTimers();
+
+    const cancelled = await ada.call('POST', `/api/games/${code}/auction/cancel`, { auctionId: fresh.id });
+    expect(cancelled.body.game!.auction!.status).toBe('cancelled');
+    expect(cancelled.body.game!.transactions.some((t) => t.kind === 'auction')).toBe(false);
   });
 });

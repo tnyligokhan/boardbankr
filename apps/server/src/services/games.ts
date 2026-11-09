@@ -1,6 +1,8 @@
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import {
+  AUCTION_BID_MS,
+  AUCTION_OPEN_MS,
   GAME_CODE_ALPHABET,
   GAME_CODE_LENGTH,
   MAX_PLAYERS,
@@ -8,8 +10,14 @@ import {
   PLAYER_COLORS,
   PLAYER_TOKENS,
   TRANSACTION_HISTORY_LIMIT,
+  REVERSIBLE_KINDS,
+  UNDO_WINDOW_MS,
   applyAction,
   applyLeave,
+  applyReversal,
+  highBid,
+  nextBidFloor,
+  pickWinner,
   firstTurn,
   nextTurn,
   normalizeGameCode,
@@ -25,10 +33,12 @@ import {
   type MyGamesResponse,
   type PlayerColor,
   type PlayerToken,
+  type StartAuctionInput,
+  type TransactionKind,
   type TurnRequest,
 } from '@mdb/shared';
 import type { Db, Tx } from '../db/index';
-import { gamePlayers, gameRounds, games, transactions, users } from '../db/schema';
+import { gamePlayers, gameRounds, games, transactions, users, type StoredAuction } from '../db/schema';
 import { AppError, isUniqueViolation } from '../errors';
 
 /**
@@ -124,6 +134,8 @@ export class GameService {
       round: g.round,
       turnUserId: g.turnUserId,
       rounds,
+      lastRoll: g.lastRoll ?? null,
+      auction: g.auction ? { ...g.auction, remainingMs: Math.max(0, Date.parse(g.auction.endsAt) - Date.now()) } : null,
       version: g.version,
       createdAt: g.createdAt.toISOString(),
       startedAt: g.startedAt?.toISOString() ?? null,
@@ -147,6 +159,8 @@ export class GameService {
         fromUserId: t.fromUserId,
         toUserId: t.toUserId,
         amount: t.amount,
+        reversesTxId: t.reversesTxId,
+        note: t.note,
         createdAt: t.createdAt.toISOString(),
       })),
     };
@@ -299,6 +313,144 @@ export class GameService {
     });
   }
 
+  /**
+   * Undoes a payment by sending the money back, recorded as a new 'reversal' entry so the
+   * history stays honest. Whoever made the payment can undo it for a short while; the host
+   * can undo any payment. Undoing one that is already undone changes nothing.
+   */
+  async undo(userId: string, ref: string, txId: number): Promise<MutationResult> {
+    const target = await this.resolve(ref);
+    return this.mutate(target.id, async (tx, g, players) => {
+      const me = players.find((p) => p.userId === userId);
+      if (!me) throw new AppError('not_a_player');
+      if (g.status !== 'active') throw new AppError('game_not_active');
+      const [original] = await tx
+        .select()
+        .from(transactions)
+        .where(and(eq(transactions.gameId, g.id), eq(transactions.id, txId)))
+        .limit(1);
+      if (!original || !REVERSIBLE_KINDS.includes(original.kind as TransactionKind)) throw new AppError('undo_unavailable');
+      const [done] = await tx
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(and(eq(transactions.gameId, g.id), eq(transactions.reversesTxId, txId)))
+        .limit(1);
+      if (done) return 'unchanged';
+      const isHost = g.hostUserId === userId;
+      const mine = original.actorUserId === userId && Date.now() - original.createdAt.getTime() <= UNDO_WINDOW_MS;
+      if (!isHost && !mine) throw new AppError('undo_unavailable');
+
+      const outcome = applyReversal(engineState(g, players), {
+        kind: original.kind as TransactionKind,
+        fromUserId: original.fromUserId,
+        toUserId: original.toUserId,
+        amount: original.amount,
+      });
+      await this.persist(tx, g, players, outcome, userId, null, { reversesTxId: original.id, note: original.note });
+    });
+  }
+
+  /** Rolls one or two dice for the table; every phone shows the same result. */
+  async roll(userId: string, ref: string, count: number): Promise<MutationResult> {
+    const target = await this.resolve(ref);
+    return this.mutate(target.id, async (tx, g, players) => {
+      const me = players.find((p) => p.userId === userId);
+      if (!me) throw new AppError('not_a_player');
+      if (g.status !== 'active') throw new AppError('game_not_active');
+      if (me.status !== 'active') throw new AppError('player_out');
+      const dice = Array.from({ length: count }, () => randomInt(1, 7));
+      const lastRoll = { seq: (g.lastRoll?.seq ?? 0) + 1, userId, dice, at: new Date().toISOString() };
+      await tx.update(games).set({ lastRoll }).where(eq(games.id, g.id));
+    });
+  }
+
+  /** Opens an auction. Only one runs at a time; an expired one is settled first. */
+  async startAuction(userId: string, ref: string, input: StartAuctionInput): Promise<MutationResult> {
+    const target = await this.resolve(ref);
+    return this.mutate(target.id, async (tx, g, players) => {
+      const me = players.find((p) => p.userId === userId);
+      if (!me) throw new AppError('not_a_player');
+      if (g.status !== 'active') throw new AppError('game_not_active');
+      if (me.status !== 'active') throw new AppError('player_out');
+      if (g.auction?.status === 'open') {
+        if (Date.parse(g.auction.endsAt) > Date.now()) throw new AppError('auction_running');
+        await this.closeAuction(tx, g, players);
+      }
+      const now = Date.now();
+      const auction: StoredAuction = {
+        id: randomUUID(),
+        title: input.title,
+        startedBy: userId,
+        minBid: input.minBid,
+        status: 'open',
+        bids: [],
+        startedAt: new Date(now).toISOString(),
+        endsAt: new Date(now + AUCTION_OPEN_MS).toISOString(),
+        winnerUserId: null,
+        price: null,
+      };
+      await tx.update(games).set({ auction }).where(eq(games.id, g.id));
+    });
+  }
+
+  /** A bid has to beat the current one and be affordable; it keeps the auction open a little longer. */
+  async bid(userId: string, ref: string, auctionId: string, amount: number): Promise<MutationResult> {
+    const target = await this.resolve(ref);
+    return this.mutate(target.id, async (tx, g, players) => {
+      const me = players.find((p) => p.userId === userId);
+      if (!me) throw new AppError('not_a_player');
+      const a = g.auction;
+      const now = Date.now();
+      if (g.status !== 'active' || !a || a.id !== auctionId || a.status !== 'open' || Date.parse(a.endsAt) <= now) {
+        throw new AppError('auction_closed');
+      }
+      if (me.status !== 'active') throw new AppError('player_out');
+      const high = highBid(a);
+      // the same bid sent twice (double tap, retry) is not an error
+      if (high && high.userId === userId && high.amount === amount) return 'unchanged';
+      if (amount < nextBidFloor(a)) throw new AppError('bid_too_low');
+      if (amount > me.balance) throw new AppError('insufficient_funds');
+      const endsAt = new Date(Math.max(Date.parse(a.endsAt), now + AUCTION_BID_MS)).toISOString();
+      const auction: StoredAuction = { ...a, bids: [...a.bids, { userId, amount, at: new Date(now).toISOString() }], endsAt };
+      await tx.update(games).set({ auction }).where(eq(games.id, g.id));
+    });
+  }
+
+  /** Whoever opened the auction, or the host, can call it off. */
+  async cancelAuction(userId: string, ref: string, auctionId: string): Promise<MutationResult> {
+    const target = await this.resolve(ref);
+    return this.mutate(target.id, async (tx, g) => {
+      const a = g.auction;
+      if (!a || a.id !== auctionId || a.status !== 'open') return 'unchanged';
+      if (a.startedBy !== userId && g.hostUserId !== userId) throw new AppError('not_host');
+      await tx
+        .update(games)
+        .set({ auction: { ...a, status: 'cancelled', endsAt: new Date().toISOString() } })
+        .where(eq(games.id, g.id));
+    });
+  }
+
+  /**
+   * Ends an auction whose time is up: the winner pays the bank. Safe to call any number of
+   * times and by anyone; the server timer and every phone at the table may all ask.
+   */
+  async settleAuction(ref: string, auctionId?: string): Promise<MutationResult> {
+    const target = await this.resolve(ref);
+    return this.mutate(target.id, async (tx, g, players) => {
+      const a = g.auction;
+      if (!a || a.status !== 'open' || (auctionId && a.id !== auctionId)) return 'unchanged';
+      if (g.status === 'active' && Date.parse(a.endsAt) > Date.now()) return 'unchanged';
+      await this.closeAuction(tx, g, players);
+    });
+  }
+
+  /** When an open auction should be settled, in ms from now; null if none is open. */
+  async auctionDueIn(gameId: string): Promise<number | null> {
+    const [g] = await this.db.select({ auction: games.auction }).from(games).where(eq(games.id, gameId)).limit(1);
+    if (!g?.auction || g.auction.status !== 'open') return null;
+    return Math.max(0, Date.parse(g.auction.endsAt) - Date.now());
+  }
+
   async leave(userId: string, ref: string): Promise<MutationResult> {
     const target = await this.resolve(ref);
     let deleted = false;
@@ -361,6 +513,7 @@ export class GameService {
           finishedAt: new Date(),
           winnerUserId: top && !tie ? top.userId : null,
           turnUserId: null,
+          ...(g.auction?.status === 'open' ? { auction: { ...g.auction, status: 'cancelled' as const } } : {}),
         })
         .where(eq(games.id, g.id));
     });
@@ -493,6 +646,7 @@ export class GameService {
     outcome: EngineOutcome,
     actorUserId: string,
     clientTxId: string | null,
+    extra: { reversesTxId?: number; note?: string | null; kind?: EngineResult['tx']['kind'] } = {},
   ): Promise<EngineResult> {
     if (!outcome.ok) throw new AppError(outcome.error);
     const { result } = outcome;
@@ -527,7 +681,9 @@ export class GameService {
     await tx.insert(transactions).values({
       gameId: g.id,
       clientTxId,
-      kind: result.tx.kind,
+      kind: extra.kind ?? result.tx.kind,
+      reversesTxId: extra.reversesTxId ?? null,
+      note: extra.note ?? null,
       actorUserId,
       fromUserId: result.tx.fromUserId,
       toUserId: result.tx.toUserId,
@@ -545,6 +701,24 @@ export class GameService {
       })
       .where(eq(games.id, g.id));
     return result;
+  }
+
+  /** Sells an open auction to the best bid that can still pay, or closes it unsold. */
+  private async closeAuction(tx: Tx, g: GameRow, players: PlayerRow[]): Promise<void> {
+    const a = g.auction!;
+    const winner = g.status === 'active' ? pickWinner(a, engineState(g, players).players) : null;
+    if (!winner) {
+      const status = g.status === 'active' ? 'unsold' : 'cancelled';
+      await tx.update(games).set({ auction: { ...a, status } }).where(eq(games.id, g.id));
+      return;
+    }
+    const outcome = applyAction(engineState(g, players), winner.userId, { kind: 'player_to_bank', amount: winner.amount });
+    // persist writes the game row too, so the sold auction goes in first and persist keeps it
+    await tx
+      .update(games)
+      .set({ auction: { ...a, status: 'sold', winnerUserId: winner.userId, price: winner.amount } })
+      .where(eq(games.id, g.id));
+    await this.persist(tx, g, players, outcome, winner.userId, null, { kind: 'auction', note: a.title || null });
   }
 
   /** Moves the turn to the next player still in; closes the round when play wraps round. */

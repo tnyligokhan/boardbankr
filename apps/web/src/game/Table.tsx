@@ -3,8 +3,10 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Coins,
+  Dices,
   Ellipsis,
   Flag,
+  Gavel,
   History,
   Hourglass,
   LogOut,
@@ -12,7 +14,7 @@ import {
   Trophy,
   UserMinus,
 } from 'lucide-react';
-import type { GameAction, GameSnapshot, PlayerView, TransactionView } from '@mdb/shared';
+import { REVERSIBLE_KINDS, canUndo, reversedIds, type GameAction, type GameSnapshot, type PlayerView, type TransactionView } from '@mdb/shared';
 import { BankChip } from '../components/BankChip';
 import { FitText } from '../components/FitText';
 import { RoundTable, type RoundTableHandle } from '../components/RoundTable';
@@ -26,7 +28,8 @@ import { useToast } from '../lib/toast';
 import { useAnimatedNumber } from '../lib/useAnimatedNumber';
 import type { Connection, Result } from '../lib/useGame';
 import { useWakeLock } from '../lib/useWakeLock';
-import { ActivityList, BankBadge, GameTopBar, seatsFromMe } from './common';
+import { ActivityList, BankBadge, GameTopBar, seatsFromMe, touchesParking, type UndoControls } from './common';
+import { AuctionBanner, AuctionSheet, AuctionStartSheet, DiceOverlay, DiceSheet, useAuctionClock, useDiceCount } from './Extras';
 import { PaySheet, type PayMode } from './PaySheet';
 
 interface Props {
@@ -39,13 +42,25 @@ interface Props {
   leave: () => Promise<Result>;
   endTurn: (userId: string) => Promise<Result>;
   skipTurn: (userId: string) => Promise<Result>;
+  undo: (txId: number) => Promise<Result>;
+  roll: (count: number) => Promise<Result>;
+  startAuction: (title: string, minBid: number) => Promise<Result>;
+  bid: (auctionId: string, amount: number) => Promise<Result>;
+  cancelAuction: (auctionId: string) => Promise<Result>;
+  settleAuction: (auctionId: string) => Promise<Result>;
 }
 
 type Confirm = { kind: 'finish' } | { kind: 'leave' } | { kind: 'kick'; player: PlayerView } | { kind: 'skip'; player: PlayerView } | null;
 
 /** Where a payment starts and ends on the table: a seat id, 'bank' or 'parking'. */
-function ends(tx: TransactionView): [string, string] | null {
+function ends(tx: TransactionView, game: GameSnapshot): [string, string] | null {
   switch (tx.kind) {
+    case 'auction':
+      return [tx.fromUserId!, 'bank'];
+    case 'reversal': {
+      const pool = touchesParking(tx, game) ? 'parking' : 'bank';
+      return [tx.fromUserId ?? pool, tx.toUserId ?? pool];
+    }
     case 'player_to_player':
       return [tx.fromUserId!, tx.toUserId!];
     case 'player_to_bank':
@@ -64,7 +79,7 @@ function ends(tx: TransactionView): [string, string] | null {
   }
 }
 
-export function Table({ game, meId, connection, act, finish, kick, leave, endTurn, skipTurn }: Props) {
+export function Table({ game, meId, connection, act, finish, kick, leave, endTurn, skipTurn, undo, roll, startAuction, bid, cancelAuction, settleAuction }: Props) {
   const { t, locale, errorText } = useI18n();
   const toast = useToast();
   const me = game.players.find((p) => p.userId === meId)!;
@@ -84,13 +99,88 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
   const sound = useSoundSetting();
   const balance = useAnimatedNumber(me.balance, 800);
 
+  // ----- undo -----
+  const gameRef = useRef(game);
+  gameRef.current = game;
+  const [undoing, setUndoing] = useState<number | null>(null);
+  const runUndo = useCallback(
+    async (txId: number) => {
+      setUndoing(txId);
+      const r = await undo(txId);
+      setUndoing(null);
+      if (r.ok) {
+        buzz(15);
+        toast.success(t('undoDone'));
+      } else toast.error(errorText(r.error));
+    },
+    [undo, toast, t, errorText],
+  );
+  const undoControls: UndoControls = {
+    can: (tx) => canUndo(tx, { userId: meId, isHost, now: Date.now(), reversed: reversedIds(game.transactions) }) && game.status === 'active',
+    run: (tx) => void runUndo(tx.id),
+    busyId: undoing,
+  };
+  /** The toast after a payment offers to undo it: my newest payment that can still be undone. */
+  const undoLastAction = useCallback(
+    () => ({
+      label: t('undo'),
+      onClick: () => {
+        const g = gameRef.current;
+        const done = reversedIds(g.transactions);
+        const last = g.transactions.find((tx) => tx.actorUserId === meId && REVERSIBLE_KINDS.includes(tx.kind) && !done.has(tx.id));
+        if (last) void runUndo(last.id);
+      },
+    }),
+    [meId, runUndo, t],
+  );
+
+  // ----- dice -----
+  const [diceCount, setDiceCount] = useDiceCount();
+  const [diceOpen, setDiceOpen] = useState(false);
+  const rollDice = useCallback(async () => {
+    const r = await roll(diceCount);
+    if (!r.ok) toast.error(errorText(r.error));
+  }, [roll, diceCount, toast, errorText]);
+
+  // ----- auction -----
+  const auction = game.auction;
+  const auctionLeft = useAuctionClock(auction, game.version);
+  const [auctionStartOpen, setAuctionStartOpen] = useState(false);
+  const [auctionOpen, setAuctionOpen] = useState(false);
+  const seenAuction = useRef(auction?.status === 'open' ? null : (auction?.id ?? null));
+  // a new auction opens on every phone at the table; its result shows for a moment, then goes
+  useEffect(() => {
+    if (!auction) return;
+    if (auction.status === 'open' && seenAuction.current !== auction.id) {
+      seenAuction.current = auction.id;
+      setAuctionOpen(true);
+      buzz(20);
+    }
+    if (auction.status !== 'open') {
+      const timer = setTimeout(() => setAuctionOpen(false), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [auction]);
+  // when the countdown runs out, ask the server to settle (it also does so on its own)
+  const auctionId = auction?.status === 'open' ? auction.id : null;
+  const expired = auctionId !== null && auctionLeft <= 0;
+  useEffect(() => {
+    if (!expired || !auctionId) return;
+    const first = setTimeout(() => void settleAuction(auctionId), 400);
+    const again = setTimeout(() => void settleAuction(auctionId), 2500);
+    return () => {
+      clearTimeout(first);
+      clearTimeout(again);
+    };
+  }, [expired, auctionId, settleAuction]);
+
   // money moving on the table: every new payment flies across, whoever made it
   const lastTx = useRef(game.transactions[0]?.id ?? 0);
   useEffect(() => {
     const fresh = game.transactions.filter((tx) => tx.id > lastTx.current).reverse();
     lastTx.current = game.transactions[0]?.id ?? lastTx.current;
     for (const tx of fresh) {
-      const e = ends(tx);
+      const e = ends(tx, game);
       if (!e || tx.amount <= 0) continue;
       const [from, to] = e;
       void flyCoins(table.current?.node(from), table.current?.node(to), coinsFor(tx.amount, game.startingCapital), coin).then(() => {
@@ -99,7 +189,7 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
         if (to !== 'bank' && to !== 'parking') table.current?.float(to, `+${text}`);
       });
     }
-  }, [game.transactions, game.startingCapital, money, coin]);
+  }, [game, money, coin]);
 
   const quick = async (key: string, action: GameAction, done: string) => {
     if (busy) return;
@@ -108,7 +198,7 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
     setBusy(null);
     if (r.ok) {
       buzz(20);
-      toast.success(done);
+      toast.success(done, undoLastAction());
     } else toast.error(errorText(r.error));
   };
 
@@ -201,6 +291,8 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
             </div>
           )}
 
+          {auction?.status === 'open' && <AuctionBanner auction={auction} left={auctionLeft} onOpen={() => setAuctionOpen(true)} />}
+
           {!imIn && <p className="mt-3 shrink-0 rounded-2xl bg-black/22 px-4 py-3 text-center text-[0.95rem] text-white/80">{t('outBanner')}</p>}
 
           <div className="table-fit">
@@ -266,6 +358,17 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
                 <ArrowUpRight aria-hidden className="size-4" />
                 {t('toBank')}
               </Button>
+              <Button variant="glass" onClick={() => setDiceOpen(true)}>
+                <Dices aria-hidden className="size-4" />
+                {t('rollDice')}
+              </Button>
+              <Button
+                variant="glass"
+                onClick={() => (auction?.status === 'open' ? setAuctionOpen(true) : setAuctionStartOpen(true))}
+              >
+                <Gavel aria-hidden className="size-4" />
+                {t('auction')}
+              </Button>
               {game.freeParkingEnabled && game.freeParkingPot > 0 && (
                 <Button
                   variant="glass"
@@ -318,7 +421,7 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
               </button>
             )}
           </div>
-          <ActivityList game={game} meId={meId} limit={6} />
+          <ActivityList game={game} meId={meId} limit={6} undo={undoControls} />
         </section>
         <section className="card self-start px-5 py-4">
           <h2 className="font-display text-lg font-bold">{t('standings')}</h2>
@@ -354,10 +457,15 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
         </section>
       </div>
 
-      <PaySheet mode={pay} game={game} me={me} act={act} onClose={() => setPay(null)} />
+      <PaySheet mode={pay} game={game} me={me} act={act} onClose={() => setPay(null)} undoAction={undoLastAction} />
+
+      <DiceOverlay roll={game.lastRoll} players={game.players} meId={meId} onRollAgain={() => void rollDice()} />
+      <DiceSheet open={diceOpen} onClose={() => setDiceOpen(false)} count={diceCount} setCount={setDiceCount} onRoll={rollDice} />
+      <AuctionStartSheet open={auctionStartOpen} onClose={() => setAuctionStartOpen(false)} game={game} start={startAuction} />
+      <AuctionSheet open={auctionOpen} onClose={() => setAuctionOpen(false)} game={game} me={me} left={auctionLeft} bid={bid} cancel={cancelAuction} />
 
       <Sheet open={historyOpen} onClose={() => setHistoryOpen(false)} title={t('history')}>
-        <ActivityList game={game} meId={meId} />
+        <ActivityList game={game} meId={meId} undo={undoControls} />
       </Sheet>
 
       <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title={t('menu')}>

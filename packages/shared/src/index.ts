@@ -6,3 +6,4 @@ export * from './catalog';
 export * from './legal';
 export * from './routes';
 export * from './tips';
+export * from './extras';

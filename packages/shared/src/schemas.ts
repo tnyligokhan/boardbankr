@@ -47,3 +47,22 @@ export const actionRequestSchema = z.object({ clientTxId, action: actionSchema }
 export type ActionRequest = z.infer<typeof actionRequestSchema>;
 
 export const kickSchema = z.object({ userId: z.string().uuid() });
+
+/** Undo an earlier payment. Undoing one that is already undone changes nothing, so retries are safe. */
+export const undoSchema = z.object({ txId: z.number().int().positive() });
+
+export const DICE_MAX = 2;
+export const rollSchema = z.object({ count: z.number().int().min(1).max(DICE_MAX).default(2) });
+
+export const AUCTION_TITLE_MAX = 40;
+export const startAuctionSchema = z.object({
+  title: z
+    .string()
+    .transform((s) => s.trim().replace(/\s+/g, ' '))
+    .pipe(z.string().max(AUCTION_TITLE_MAX)),
+  minBid: z.number().int().min(0).max(AMOUNT_MAX),
+});
+export type StartAuctionInput = z.infer<typeof startAuctionSchema>;
+
+export const bidSchema = z.object({ auctionId: z.string().uuid(), amount: amountSchema });
+export const auctionRefSchema = z.object({ auctionId: z.string().uuid() });

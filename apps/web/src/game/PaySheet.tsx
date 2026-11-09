@@ -8,7 +8,7 @@ import { Button } from '../components/ui';
 import { buzz, ching } from '../lib/fx';
 import { compactMoney, formatMoney, quickAmounts } from '../lib/format';
 import { useI18n } from '../lib/i18n';
-import { useToast } from '../lib/toast';
+import { useToast, type ToastAction } from '../lib/toast';
 import type { Result } from '../lib/useGame';
 import { BankBadge, ParkingBadge } from './common';
 
@@ -23,12 +23,15 @@ export function PaySheet({
   me,
   onClose,
   act,
+  undoAction,
 }: {
   mode: PayMode | null;
   game: GameSnapshot;
   me: PlayerView;
   onClose: () => void;
   act: (a: GameAction) => Promise<Result>;
+  /** Offered on the toast after paying, to take it back. */
+  undoAction?: () => ToastAction;
 }) {
   const { t, locale, errorText } = useI18n();
   const toast = useToast();
@@ -97,7 +100,7 @@ export function PaySheet({
     if (r.ok) {
       buzz(20);
       ching(Boolean(taking));
-      toast.success(taking ? t('tookDone', { amount: money(amount) }) : t('paidTo', { name: toName(to!), amount: money(amount) }));
+      toast.success(taking ? t('tookDone', { amount: money(amount) }) : t('paidTo', { name: toName(to!), amount: money(amount) }), undoAction?.());
       onClose();
     } else {
       toast.error(errorText(r.error));

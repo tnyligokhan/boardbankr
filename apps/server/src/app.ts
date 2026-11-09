@@ -8,11 +8,16 @@ import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
 import {
   actionRequestSchema,
+  auctionRefSchema,
+  bidSchema,
   createGameSchema,
   guestLoginSchema,
   kickSchema,
+  rollSchema,
+  startAuctionSchema,
   tokenSchema,
   turnSchema,
+  undoSchema,
   updateMeSchema,
   type ClientMessage,
   type ServerMessage,
@@ -263,6 +268,57 @@ export async function buildApp({ config, db, ping, fetchImpl }: AppDeps) {
   mutation('/api/games/:ref/kick', (uid, id, body) => gamesSvc.kick(uid, id, parse(kickSchema, body).userId));
   mutation('/api/games/:ref/finish', (uid, id) => gamesSvc.finish(uid, id));
   mutation('/api/games/:ref/disband', (uid, id) => gamesSvc.disband(uid, id));
+  mutation('/api/games/:ref/undo', (uid, id, body) => gamesSvc.undo(uid, id, parse(undoSchema, body).txId), 60);
+  mutation('/api/games/:ref/roll', (uid, id, body) => gamesSvc.roll(uid, id, parse(rollSchema, body ?? {}).count), 60);
+
+  /**
+   * Auctions end on the server clock. A timer settles each one when its time is up and tells
+   * the table; phones also ask when their countdown reaches zero, which covers a restart.
+   */
+  const auctionTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const scheduleSettle = async (gameId: string, code: string) => {
+    clearTimeout(auctionTimers.get(gameId));
+    auctionTimers.delete(gameId);
+    const due = await gamesSvc.auctionDueIn(gameId);
+    if (due === null) return;
+    const timer = setTimeout(async () => {
+      auctionTimers.delete(gameId);
+      try {
+        await afterMutation(await gamesSvc.settleAuction(gameId), code);
+        await scheduleSettle(gameId, code);
+      } catch (err) {
+        app.log.warn({ err, gameId }, 'auction settle failed');
+      }
+    }, due + 150);
+    timer.unref?.();
+    auctionTimers.set(gameId, timer);
+  };
+  app.addHook('onClose', async () => {
+    for (const timer of auctionTimers.values()) clearTimeout(timer);
+  });
+
+  const auctionMutation = (route: string, run: (userId: string, gameId: string, body: unknown) => Promise<MutationResult>) =>
+    mutation(
+      route,
+      async (uid, id, body) => {
+        const result = await run(uid, id, body);
+        const game = await gamesSvc.resolve(id);
+        await scheduleSettle(game.id, game.code);
+        return result;
+      },
+      240,
+    );
+
+  auctionMutation('/api/games/:ref/auction', (uid, id, body) => gamesSvc.startAuction(uid, id, parse(startAuctionSchema, body)));
+  auctionMutation('/api/games/:ref/auction/bid', (uid, id, body) => {
+    const { auctionId, amount } = parse(bidSchema, body);
+    return gamesSvc.bid(uid, id, auctionId, amount);
+  });
+  auctionMutation('/api/games/:ref/auction/cancel', (uid, id, body) => gamesSvc.cancelAuction(uid, id, parse(auctionRefSchema, body).auctionId));
+  auctionMutation('/api/games/:ref/auction/settle', async (uid, id, body) => {
+    if (!(await gamesSvc.isMember(id, uid))) throw new AppError('not_a_player');
+    return gamesSvc.settleAuction(id, parse(auctionRefSchema, body).auctionId);
+  });
 
   // ---------- websocket ----------
 

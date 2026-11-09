@@ -8,15 +8,21 @@ interface Piece {
   color: PlayerColor;
   token: PlayerToken;
 }
+/** One button on a toast, such as undoing what was just done. */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
 interface Toast {
   id: number;
   tone: Tone;
   text: string;
   piece?: Piece;
+  action?: ToastAction;
 }
 
 interface ToastApi {
-  success: (text: string) => void;
+  success: (text: string, action?: ToastAction) => void;
   error: (text: string) => void;
   /** Money coming in, shown in gold with the payer's piece. */
   incoming: (text: string, piece?: Piece) => void;
@@ -30,15 +36,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
 
-  const push = useCallback((tone: Tone, text: string, piece?: Piece) => {
+  const push = useCallback((tone: Tone, text: string, piece?: Piece, action?: ToastAction) => {
     const id = nextId.current++;
-    setToasts((list) => [...list.slice(-2), { id, tone, text, piece }]);
-    setTimeout(() => setToasts((list) => list.filter((t) => t.id !== id)), tone === 'error' ? 5000 : 3200);
+    setToasts((list) => [...list.slice(-2), { id, tone, text, piece, action }]);
+    // a toast with a button stays long enough to reach it
+    setTimeout(() => setToasts((list) => list.filter((t) => t.id !== id)), tone === 'error' || action ? 5500 : 3200);
   }, []);
+  const dismiss = useCallback((id: number) => setToasts((list) => list.filter((t) => t.id !== id)), []);
 
   const api = useMemo<ToastApi>(
     () => ({
-      success: (t) => push('success', t),
+      success: (t, action) => push('success', t, undefined, action),
       error: (t) => push('error', t),
       incoming: (t, p) => push('incoming', t, p),
       turn: (t, p) => push('turn', t, p),
@@ -78,6 +86,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 </span>
               )}
               <span>{t.text}</span>
+              {t.action && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismiss(t.id);
+                    t.action!.onClick();
+                  }}
+                  className={`-my-1 -mr-2 ml-1 shrink-0 rounded-xl px-3 py-1.5 font-display text-sm font-bold ${gold ? 'bg-gold-ink text-gold' : 'bg-gold text-gold-ink'}`}
+                >
+                  {t.action.label}
+                </button>
+              )}
             </div>
           );
         })}

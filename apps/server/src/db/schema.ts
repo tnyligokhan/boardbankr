@@ -13,6 +13,10 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { AuctionView, DiceRoll } from '@mdb/shared';
+
+/** An auction as stored; `remainingMs` is worked out when a snapshot is made. */
+export type StoredAuction = Omit<AuctionView, 'remainingMs'>;
 
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 
@@ -62,6 +66,10 @@ export const games = pgTable(
     /** Current round from 1 once the game runs; 0 before that or when turns are off. */
     round: integer('round').notNull().default(0),
     turnUserId: uuid('turn_user_id'),
+    /** The last dice roll, shown on every phone. */
+    lastRoll: jsonb('last_roll').$type<DiceRoll>(),
+    /** The current or most recent auction. */
+    auction: jsonb('auction').$type<StoredAuction>(),
     version: integer('version').notNull().default(1),
     winnerUserId: uuid('winner_user_id').references(() => users.id),
     createdAt: createdAt(),
@@ -108,11 +116,16 @@ export const transactions = pgTable(
     fromUserId: uuid('from_user_id'),
     toUserId: uuid('to_user_id'),
     amount: bigint('amount', { mode: 'number' }).notNull(),
+    /** For a reversal: the payment it undid. */
+    reversesTxId: bigint('reverses_tx_id', { mode: 'number' }),
+    note: text('note'),
     createdAt: createdAt(),
   },
   (t) => [
     // Makes client retries idempotent.
     uniqueIndex('transactions_client_tx_idx').on(t.gameId, t.clientTxId),
+    // A payment can be undone once.
+    uniqueIndex('transactions_reverses_idx').on(t.gameId, t.reversesTxId),
     index('transactions_game_idx').on(t.gameId, t.id),
   ],
 );

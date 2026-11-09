@@ -836,6 +836,11 @@
   }
 }
 
+/* a die rattling in the hand: whole-pixel hops and a quarter tilt, only while it rolls */
+@keyframes die-tumble {
+  0% { transform: translateY(-4px) rotate(-12deg); }
+  100% { transform: translateY(2px) rotate(10deg); }
+}
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

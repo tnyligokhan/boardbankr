@@ -30,6 +30,15 @@ export function describeTx(tx: TransactionView, game: GameSnapshot, t: T): strin
         : t('feedBankruptBank', { name: name(tx.fromUserId) });
     case 'leave':
       return t('feedLeft', { name: name(tx.fromUserId) });
+    case 'auction':
+      return tx.note ? t('feedAuctionItem', { name: name(tx.fromUserId), item: tx.note }) : t('feedAuction', { name: name(tx.fromUserId) });
+    case 'reversal': {
+      // the original payment went from whoever is now paid back to whoever now gives it back
+      const original = game.transactions.find((x) => x.id === tx.reversesTxId);
+      const pot = original?.kind === 'player_to_parking' || original?.kind === 'parking_to_player';
+      const side = (id: string | null) => (id ? name(id) : pot ? t('parkingShort') : t('theBank'));
+      return t('feedReversal', { from: side(tx.toUserId), to: side(tx.fromUserId) });
+    }
   }
 }
 

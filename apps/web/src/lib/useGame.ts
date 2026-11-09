@@ -217,6 +217,12 @@ export function useGame(ref: string, onSnapshot?: (next: GameSnapshot, prev: Gam
     endTurn: (userId: string) => command('turn', { kind: 'end', userId }, 3),
     skipTurn: (userId: string) => command('turn', { kind: 'skip', userId }, 3),
     setToken: (token: PlayerToken) => command('token', { token }),
+    undo: (txId: number) => command('undo', { txId }, 3),
+    roll: (count: number) => command('roll', { count }),
+    startAuction: (title: string, minBid: number) => command('auction', { title, minBid }),
+    bid: (auctionId: string, amount: number) => command('auction/bid', { auctionId, amount }, 3),
+    cancelAuction: (auctionId: string) => command('auction/cancel', { auctionId }, 3),
+    settleAuction: (auctionId: string) => command('auction/settle', { auctionId }, 2),
     leave: () => leaveOrDisband('leave'),
     disband: () => leaveOrDisband('disband'),
   };

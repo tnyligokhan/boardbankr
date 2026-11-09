@@ -10,7 +10,7 @@ dist
 .idea
 .DS_Store
 coverage
-.pgdata
+.pgdata*
 
 # design tool cache
 .impeccable/hook.cache.json

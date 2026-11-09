@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, applyLeave, firstTurn, nextTurn, type EngineState } from './engine';
+import { applyReversal, canUndo, nextBidFloor, pickWinner, reversedIds } from './extras';
 
 const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
@@ -143,5 +144,59 @@ describe('nextTurn', () => {
 
   it('has nobody to move to when everyone is out', () => {
     expect(nextTurn(seats({ [A]: 'left', [B]: 'left', [C]: 'left', [D]: 'left' }), A)).toEqual({ userId: null, wrapped: false });
+  });
+});
+
+describe('applyReversal', () => {
+  it('sends a transfer back', () => {
+    const out = applyReversal(state(), { kind: 'player_to_player', fromUserId: A, toUserId: B, amount: 300 });
+    expect(out.ok && bal(out.result, A)).toBe(1800);
+    expect(out.ok && bal(out.result, B)).toBe(1200);
+    expect(out.ok && out.result.tx).toEqual({ kind: 'reversal', fromUserId: B, toUserId: A, amount: 300 });
+  });
+
+  it('moves money back out of and into the parking pot', () => {
+    const toPot = applyReversal(state({ freeParkingPot: 100 }), { kind: 'player_to_parking', fromUserId: A, toUserId: null, amount: 100 });
+    expect(toPot.ok && toPot.result.freeParkingPot).toBe(0);
+    expect(toPot.ok && bal(toPot.result, A)).toBe(1600);
+    const spent = applyReversal(state({ freeParkingPot: 40 }), { kind: 'player_to_parking', fromUserId: A, toUserId: null, amount: 100 });
+    expect(spent).toEqual({ ok: false, error: 'undo_insufficient' });
+    const fromPot = applyReversal(state(), { kind: 'parking_to_player', fromUserId: null, toUserId: A, amount: 250 });
+    expect(fromPot.ok && fromPot.result.freeParkingPot).toBe(250);
+  });
+
+  it('refuses when the receiver is short or out', () => {
+    expect(applyReversal(state(), { kind: 'bank_to_player', fromUserId: null, toUserId: A, amount: 2000 })).toEqual({ ok: false, error: 'undo_insufficient' });
+    const out = state({ players: [{ userId: A, balance: 0, status: 'bankrupt' }, { userId: B, balance: 1500, status: 'active' }] });
+    expect(applyReversal(out, { kind: 'player_to_player', fromUserId: A, toUserId: B, amount: 10 })).toEqual({ ok: false, error: 'undo_unavailable' });
+    expect(applyReversal(state(), { kind: 'bankruptcy', fromUserId: A, toUserId: null, amount: 10 })).toEqual({ ok: false, error: 'undo_unavailable' });
+  });
+
+  it('knows who may undo what', () => {
+    const tx = { id: 7, kind: 'player_to_player' as const, actorUserId: A, createdAt: new Date(1_000_000).toISOString() };
+    const opts = { userId: A, isHost: false, now: 1_000_000 + 60_000, reversed: new Set<number>() };
+    expect(canUndo(tx, opts)).toBe(true);
+    expect(canUndo(tx, { ...opts, now: 1_000_000 + 5 * 60_000 })).toBe(false);
+    expect(canUndo(tx, { ...opts, now: 1_000_000 + 5 * 60_000, isHost: true })).toBe(true);
+    expect(canUndo(tx, { ...opts, userId: B })).toBe(false);
+    expect(canUndo(tx, { ...opts, reversed: reversedIds([{ kind: 'reversal', reversesTxId: 7 }]) })).toBe(false);
+  });
+});
+
+describe('auction rules', () => {
+  const bids = [
+    { userId: A, amount: 100, at: '' },
+    { userId: B, amount: 900, at: '' },
+  ];
+  it('needs more than the last bid, and at least the starting price', () => {
+    expect(nextBidFloor({ bids: [], minBid: 0 })).toBe(1);
+    expect(nextBidFloor({ bids: [], minBid: 50 })).toBe(50);
+    expect(nextBidFloor({ bids, minBid: 50 })).toBe(901);
+  });
+  it('sells to the best bid that can still pay', () => {
+    expect(pickWinner({ bids }, state().players)?.userId).toBe(B);
+    const poor = state({ players: [{ userId: A, balance: 1500, status: 'active' }, { userId: B, balance: 300, status: 'active' }] });
+    expect(pickWinner({ bids }, poor.players)?.userId).toBe(A);
+    expect(pickWinner({ bids: [] }, poor.players)).toBeNull();
   });
 });

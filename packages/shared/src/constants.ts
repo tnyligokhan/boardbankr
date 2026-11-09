@@ -58,6 +58,11 @@ export const ERROR_CODES = [
   'token_taken',
   'turns_disabled',
   'not_your_turn',
+  'undo_unavailable',
+  'undo_insufficient',
+  'auction_running',
+  'auction_closed',
+  'bid_too_low',
   'google_disabled',
   'internal',
 ] as const;
