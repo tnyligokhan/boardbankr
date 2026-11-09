@@ -21,8 +21,9 @@ const notify = () => listeners.forEach((fn) => fn());
 
 export function initInstall() {
   window.addEventListener('beforeinstallprompt', (e) => {
-    // keep the browser's own mini bar away; the card offers it at a better moment
-    e.preventDefault();
+    // Chrome's own "Install" bar at the bottom is left to show: it is the real install (an app
+    // in the drawer), and people know it from other sites. The card can still open the same
+    // dialog with this event.
     deferred = e as InstallPromptEvent;
     notify();
   });
