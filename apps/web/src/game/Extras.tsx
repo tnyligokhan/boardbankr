@@ -33,25 +33,133 @@ const PIPS: Record<number, number[]> = {
   6: [0, 2, 3, 5, 6, 8],
 };
 
+/** The colour of every face, so the thrown cube and the resting die look the same. */
+const DIE_FACE = '#faf7f0';
+
 /** A paper die with ink pips, drawn crisp at any size. */
-export function Die({ value, size = 64, rolling }: { value: number; size?: number; rolling?: boolean }) {
+export function Die({ value, size = 64 }: { value: number; size?: number }) {
   return (
     <span
       aria-hidden
-      className="grid shrink-0 grid-cols-3 grid-rows-3 rounded-[22%] bg-card p-[16%] shadow-[inset_0_0_0_2px_var(--line),0_4px_0_var(--line),0_8px_18px_rgb(0_0_0/0.18)]"
-      style={{ width: size, height: size, animation: rolling ? 'die-tumble 160ms steps(2) infinite' : undefined }}
+      className="grid shrink-0 grid-cols-3 grid-rows-3 rounded-[20%] shadow-[inset_0_0_0_2px_var(--line),0_4px_0_var(--line),0_8px_18px_rgb(0_0_0/0.18)]"
+      // padding in pixels: a percentage would be taken from the row the die sits in, not the die
+      style={{ width: size, height: size, padding: size * 0.16, background: DIE_FACE }}
     >
+      <Pips value={value} />
+    </span>
+  );
+}
+
+/** How long a throw takes, from the hand to the last bounce. */
+const ROLL_MS = 1300;
+const SHOW_MS = 3800;
+/** When a die hits the table, as a share of the throw; the drop keyframes below use the same. */
+const IMPACTS = [0.42, 0.66, 0.82, 0.92];
+/** The second die lands a moment after the first. */
+const DIE_DELAY_MS = 70;
+
+/** How to turn the cube so `value` faces the viewer: [rotateX, rotateY]. */
+const FACE_TURN: Record<number, [number, number]> = { 1: [0, 0], 6: [0, 180], 3: [0, -90], 4: [0, 90], 2: [-90, 0], 5: [90, 0] };
+/** Where each face sits on the cube; opposite faces add up to seven, like a real die. */
+const FACE_PLACE: [number, string][] = [
+  [1, 'rotateY(0deg)'],
+  [6, 'rotateY(180deg)'],
+  [3, 'rotateY(90deg)'],
+  [4, 'rotateY(-90deg)'],
+  [2, 'rotateX(90deg)'],
+  [5, 'rotateX(-90deg)'],
+];
+
+function Pips({ value }: { value: number }) {
+  return (
+    <>
       {Array.from({ length: 9 }, (_, i) => (
         <span key={i} className="grid place-items-center">
           {PIPS[value]?.includes(i) && <span className="block size-[78%] rounded-full bg-ink" />}
         </span>
       ))}
-    </span>
+    </>
   );
 }
 
-const ROLL_MS = 650;
-const SHOW_MS = 4200;
+/**
+ * A real cube, thrown: it drops in, bounces three times while it tumbles, and comes to rest
+ * with `value` on top. It only exists while it moves; the resting die is the flat one, so it
+ * stays sharp.
+ */
+function ThrownDie({ value, size, delay, onDone }: { value: number; size: number; delay: number; onDone: () => void }) {
+  const hop = useRef<HTMLSpanElement>(null);
+  const cube = useRef<HTMLSpanElement>(null);
+  const done = useRef(onDone);
+  done.current = onDone;
+
+  useEffect(() => {
+    const [fx, fy] = FACE_TURN[value] ?? [0, 0];
+    const spin = (n: number) => 360 * n * (Math.random() < 0.5 ? -1 : 1);
+    const from = `rotateX(${spin(2) + Math.random() * 90}deg) rotateY(${spin(1) + Math.random() * 90}deg) rotateZ(${Math.random() * 60 - 30}deg)`;
+    const mid = `rotateX(${fx + spin(1)}deg) rotateY(${fy + 180}deg) rotateZ(0deg)`;
+    const to = `rotateX(${fx}deg) rotateY(${fy}deg) rotateZ(0deg)`;
+    const timing = { duration: ROLL_MS, delay, fill: 'both' as const };
+    const [a, b, c, d] = IMPACTS;
+    const drop = hop.current?.animate(
+      [
+        { transform: 'translateY(-90px)', offset: 0, easing: 'cubic-bezier(.5,0,1,1)' },
+        { transform: 'translateY(0)', offset: a, easing: 'cubic-bezier(0,0,.5,1)' },
+        { transform: 'translateY(-26px)', offset: (a! + b!) / 2, easing: 'cubic-bezier(.5,0,1,1)' },
+        { transform: 'translateY(0)', offset: b, easing: 'cubic-bezier(0,0,.5,1)' },
+        { transform: 'translateY(-10px)', offset: (b! + c!) / 2, easing: 'cubic-bezier(.5,0,1,1)' },
+        { transform: 'translateY(0)', offset: c, easing: 'cubic-bezier(0,0,.5,1)' },
+        { transform: 'translateY(-3px)', offset: (c! + d!) / 2, easing: 'cubic-bezier(.5,0,1,1)' },
+        { transform: 'translateY(0)', offset: d },
+        { transform: 'translateY(0)', offset: 1 },
+      ],
+      timing,
+    );
+    const turn = cube.current?.animate(
+      [
+        { transform: from, offset: 0 },
+        { transform: mid, offset: a },
+        { transform: to, offset: 0.88, easing: 'cubic-bezier(.2,.8,.3,1)' },
+        { transform: to, offset: 1 },
+      ],
+      { ...timing, easing: 'cubic-bezier(.3,.1,.3,1)' },
+    );
+    let live = true;
+    void Promise.all([drop?.finished, turn?.finished])
+      .catch(() => undefined)
+      .then(() => live && done.current());
+    return () => {
+      live = false;
+      drop?.cancel();
+      turn?.cancel();
+    };
+  }, [value, delay]);
+
+  const half = size / 2;
+  return (
+    <span aria-hidden className="block" style={{ width: size, height: size, perspective: size * 9 }}>
+      <span ref={hop} className="block size-full">
+        <span ref={cube} className="relative block size-full" style={{ transformStyle: 'preserve-3d' }}>
+          {FACE_PLACE.map(([face, place]) => (
+            <span
+              key={face}
+              className="absolute inset-0 grid grid-cols-3 grid-rows-3 rounded-[20%] [backface-visibility:hidden]"
+              style={{
+                transform: `${place} translateZ(${half}px)`,
+                padding: size * 0.16,
+                background: DIE_FACE,
+                // a faint edge so the cube reads as solid while it turns
+                boxShadow: 'inset 0 0 0 2px var(--line), inset 0 -6px 10px rgb(0 0 0 / 0.06)',
+              }}
+            >
+              <Pips value={face} />
+            </span>
+          ))}
+        </span>
+      </span>
+    </span>
+  );
+}
 
 /**
  * Shows every roll at the table to everyone: the dice tumble for a moment, then land on what
@@ -62,7 +170,7 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
   const seen = useRef(roll?.seq ?? 0);
   const [shown, setShown] = useState<DiceRoll | null>(null);
   const [rolling, setRolling] = useState(false);
-  const [faces, setFaces] = useState<number[]>([]);
+  const landed = useRef(0);
 
   // keyed on the roll number: later snapshots carry the same roll and must not restart it
   const seq = roll?.seq ?? 0;
@@ -72,25 +180,27 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
     const roll = latest.current;
     if (!roll || seq <= seen.current) return;
     seen.current = seq;
+    landed.current = 0;
     setShown(roll);
-    setRolling(true);
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setRolling(!still);
     buzz(12);
-    sounds.diceShake(ROLL_MS);
-    const shuffle = setInterval(() => setFaces(roll.dice.map(() => 1 + Math.floor(Math.random() * 6))), 90);
-    const land = setTimeout(() => {
-      clearInterval(shuffle);
-      setRolling(false);
-      setFaces(roll.dice);
-      buzz(25);
-      sounds.diceLand();
-    }, ROLL_MS);
+    // rattle in the hand while they fly, then a clack at every bounce of every die
+    sounds.diceRoll(
+      380,
+      roll.dice.map((_, i) => IMPACTS.map((f) => (i * DIE_DELAY_MS + f * ROLL_MS) / 1000)),
+    );
     const hide = setTimeout(() => setShown(null), ROLL_MS + SHOW_MS);
-    return () => {
-      clearInterval(shuffle);
-      clearTimeout(land);
-      clearTimeout(hide);
-    };
+    return () => clearTimeout(hide);
   }, [seq]);
+
+  const onDieDone = () => {
+    landed.current++;
+    if (shown && landed.current >= shown.dice.length) {
+      setRolling(false);
+      buzz(25);
+    }
+  };
 
   if (!shown) return null;
   const who = players.find((p) => p.userId === shown.userId);
@@ -111,10 +221,14 @@ export function DiceOverlay({ roll, players, meId, onRollAgain }: { roll: DiceRo
           {who && <Token color={who.color} token={who.token} size={24} />}
           {mine ? t('diceYouRolled') : t('diceRolledBy', { name: who?.name ?? '' })}
         </p>
-        <div className="flex gap-4">
-          {(faces.length ? faces : shown.dice).map((v, i) => (
-            <Die key={i} value={v} size={68} rolling={rolling} />
-          ))}
+        <div className="flex h-[68px] gap-5">
+          {shown.dice.map((v, i) =>
+            rolling ? (
+              <ThrownDie key={`${shown.seq}-${i}`} value={v} size={68} delay={i * DIE_DELAY_MS} onDone={onDieDone} />
+            ) : (
+              <Die key={i} value={v} size={68} />
+            ),
+          )}
         </div>
         <p className="h-7 font-display text-xl font-extrabold tabular" aria-hidden={rolling}>
           {rolling ? '' : double ? `${t('diceTotal', { n: total })} · ${t('diceDouble')}` : t('diceTotal', { n: total })}

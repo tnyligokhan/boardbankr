@@ -126,24 +126,52 @@ function knock(ctx: AudioContext, start: number, opts: { freq?: number; gain?: n
   src.start(start);
 }
 
+/**
+ * Hard plastic hitting something: a click of a few milliseconds, the bright ring of the die
+ * itself, and, on the table, a little low thump. Pitches vary a touch so no two sound alike.
+ */
+function clack(ctx: AudioContext, start: number, { gain, table }: { gain: number; table: boolean }) {
+  const length = Math.ceil(ctx.sampleRate * 0.012);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp((-i / length) * 9);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const high = ctx.createBiquadFilter();
+  high.type = 'highpass';
+  high.frequency.value = 1400;
+  const body = ctx.createBiquadFilter();
+  body.type = 'peaking';
+  body.frequency.value = 3200 + Math.random() * 1800;
+  body.Q.value = 7;
+  body.gain.value = 14;
+  const g = ctx.createGain();
+  g.gain.value = gain;
+  src.connect(high).connect(body).connect(g).connect(ctx.destination);
+  src.start(start);
+  // the die's own ring, very short
+  tone(ctx, start, 2400 + Math.random() * 1400, { type: 'sine', gain: gain * 0.18, decay: 0.035 });
+  if (table) tone(ctx, start, 120 + Math.random() * 40, { type: 'sine', gain: gain * 0.35, decay: 0.07 });
+}
+
 /** A short coin "ching": rising for money in, falling for money out. */
 export function ching(up = true) {
   play((ctx, t) => (up ? [1318, 1760] : [988, 740]).forEach((f, i) => tone(ctx, t + i * 0.07, f)));
 }
 
 export const sounds = {
-  /** Dice rattling in the hand for `ms`. */
-  diceShake(ms: number) {
+  /**
+   * A throw: the dice clack against each other in the hand for `rattleMs`, then hit the table
+   * at each time in `impacts` (seconds from now), each bounce a little softer.
+   */
+  diceRoll(rattleMs: number, impacts: number[][]) {
     play((ctx, t) => {
-      for (let at = 0; at < ms / 1000; at += 0.07 + Math.random() * 0.05) knock(ctx, t + at, { freq: 2200 + Math.random() * 1200, gain: 0.12, decay: 0.03 });
-    });
-  },
-  /** Dice landing: two knocks on wood. */
-  diceLand() {
-    play((ctx, t) => {
-      knock(ctx, t, { freq: 900, gain: 0.35, decay: 0.06 });
-      tone(ctx, t, 190, { type: 'sine', gain: 0.12, decay: 0.12 });
-      knock(ctx, t + 0.09, { freq: 1100, gain: 0.22, decay: 0.05 });
+      for (let at = 0; at < rattleMs / 1000; at += 0.03 + Math.random() * 0.045) {
+        clack(ctx, t + at, { gain: 0.1 + Math.random() * 0.08, table: false });
+      }
+      for (const die of impacts) {
+        die.forEach((at, i) => clack(ctx, t + at, { gain: 0.5 * 0.55 ** i, table: true }));
+      }
     });
   },
   /** It's my turn: a soft two-note bell. */
