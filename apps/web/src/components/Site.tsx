@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { ArrowUpRight, Plus } from 'lucide-react';
-import { CATALOG, FAQ, PLAYER_COLORS, PLAYER_TOKENS, type CatalogGame } from '@mdb/shared';
+import { CATALOG, FAQ, PLAYER_COLORS, PLAYER_TOKENS, parsePublicPath, publicPath, type CatalogGame } from '@mdb/shared';
 import { useI18n, usePublicPath } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { LangSwitch, Logo } from './Logo';
@@ -42,34 +42,126 @@ export function SiteHeader() {
   );
 }
 
+const FOOTER_SEATS = [
+  ['rose', 'crown'],
+  ['sun', 'car'],
+  ['mint', 'sailboat'],
+  ['sky', 'rocket'],
+  ['lilac', 'gem'],
+  ['peach', 'bird'],
+  ['aqua', 'anchor'],
+  ['sand', 'cat'],
+] as const;
+
+function FooterHeading({ children }: { children: ReactNode }) {
+  return <h2 className="mb-4 font-display text-xs font-bold tracking-[0.14em] text-gold uppercase">{children}</h2>;
+}
+
+const footerLink = 'rounded-md text-white/75 transition-colors hover:text-white focus-visible:text-white';
+
+/**
+ * The page ends at the edge of the table: a wood rail, then felt. Same pieces as the game —
+ * the eight seats, the gold bank — so the footer reads as part of the table, not a site template.
+ */
 export function SiteFooter() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const { user } = useSession();
   const path = usePublicPath();
+  const location = useLocation();
+  const here = parsePublicPath(location.pathname)?.page ?? { kind: 'home' as const };
+  const year = new Date().getFullYear();
+
   return (
-    <footer className="border-t-[1.5px] border-line">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 pb-safe text-sm text-ink-2 sm:px-6">
-        <nav aria-label={t('navGames')} className="flex flex-wrap gap-x-5 gap-y-2 font-semibold">
-          {CATALOG.map((g) => (
-            <Link key={g.slug} to={path({ kind: 'game', slug: g.slug })} className="hover:text-ink">
-              {g.name}
+    <footer className="felt mt-6">
+      <div aria-hidden className="table-rail" />
+      <div className="mx-auto max-w-6xl px-4 pt-12 pb-safe sm:px-6 lg:pt-16">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-12 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.6fr)_minmax(0,0.75fr)] lg:gap-14">
+          <div className="flex flex-col items-start gap-5">
+            <Logo />
+            <p className="max-w-[34ch] text-[1.02rem] leading-relaxed text-pretty text-white/80">{t('footerTagline')}</p>
+            <div className="flex items-center gap-3">
+              <div className="flex">
+                {FOOTER_SEATS.map(([c, token]) => (
+                  <span key={c} className="rounded-full not-first:-ml-2.5">
+                    <Token color={c} token={token} size={30} />
+                  </span>
+                ))}
+              </div>
+              <span className="text-sm font-bold text-white/65">{t('ctaPlayers')}</span>
+            </div>
+            <Link to={user ? '/new' : '/login?next=%2Fnew'} className={`${buttonClass('gold')} mt-1`}>
+              {t('heroCreate')}
             </Link>
-          ))}
-        </nav>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <span>© {new Date().getFullYear()} Gökhan Tonyalı</span>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            <Link to={path({ kind: 'legal' })} className="font-bold hover:text-ink">
-              {t('footerLegal')}
-            </Link>
-            <a href={REPO} target="_blank" rel="noreferrer" className="font-bold hover:text-ink">
-              {t('footerSource')}
-            </a>
-            <a href={COFFEE} target="_blank" rel="noreferrer" className="font-bold hover:text-ink">
-              {t('footerCoffee')}
-            </a>
+          </div>
+
+          <nav aria-label={t('footerGuides')}>
+            <FooterHeading>{t('footerGuides')}</FooterHeading>
+            <ul className="columns-2 gap-x-6 text-[0.95rem]">
+              {CATALOG.map((g) => (
+                <li key={g.slug} className="mb-3 break-inside-avoid">
+                  <Link to={path({ kind: 'game', slug: g.slug })} className={`${footerLink} block leading-snug`}>
+                    {g.name}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <Link to={path({ kind: 'games' })} className="rounded-md font-bold text-gold hover:underline">
+                  {t('gamesAll')} →
+                </Link>
+              </li>
+            </ul>
+          </nav>
+
+          <div className="grid grid-cols-2 gap-8 lg:grid-cols-1">
+            <nav aria-label={t('footerLinks')}>
+              <FooterHeading>{t('footerLinks')}</FooterHeading>
+              <ul className="flex flex-col gap-2.5 text-[0.95rem]">
+                <li>
+                  <Link to={path({ kind: 'legal' })} className={footerLink}>
+                    {t('footerLegal')}
+                  </Link>
+                </li>
+                <li>
+                  <a href={REPO} target="_blank" rel="noreferrer" className={footerLink}>
+                    {t('footerSource')}
+                  </a>
+                </li>
+                <li>
+                  <a href={COFFEE} target="_blank" rel="noreferrer" className={footerLink}>
+                    {t('footerCoffee')}
+                  </a>
+                </li>
+              </ul>
+            </nav>
+            <nav aria-label={t('language')}>
+              <FooterHeading>{t('language')}</FooterHeading>
+              <ul className="flex flex-col gap-2.5 text-[0.95rem]">
+                {(['tr', 'en'] as const).map((l) => (
+                  <li key={l}>
+                    <Link
+                      to={publicPath(l, here)}
+                      hrefLang={l}
+                      lang={l}
+                      aria-current={l === lang ? 'true' : undefined}
+                      className={l === lang ? 'rounded-md font-bold text-white' : footerLink}
+                    >
+                      {l === 'tr' ? 'Türkçe' : 'English'}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
           </div>
         </div>
-        <p className="max-w-[80ch] text-xs leading-relaxed text-ink-3">{t('disclaimer')}</p>
+
+        <div className="mt-12 flex flex-col gap-4 border-t border-white/12 py-7 text-xs leading-relaxed text-white/55 lg:mt-14">
+          <p className="max-w-[90ch]">{t('disclaimer')}</p>
+          <p className="flex flex-wrap gap-x-2 font-semibold text-white/65">
+            <span>© {year} Gökhan Tonyalı</span>
+            <span aria-hidden>·</span>
+            <span>{t('footerFree')}</span>
+          </p>
+        </div>
       </div>
     </footer>
   );

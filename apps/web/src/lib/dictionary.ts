@@ -51,6 +51,10 @@ const tr = {
   footerLegal: 'Yasal uyarı',
   footerSource: 'Kaynak kodu',
   footerCoffee: 'Kahve ısmarla',
+  footerTagline: 'Kâğıt parayı kutuda bırakın. Banka herkesin telefonunda, oyun masada.',
+  footerFree: 'Ücretsiz ve açık kaynak',
+  footerGuides: 'Oyun rehberleri',
+  footerLinks: 'BoardBankr',
 
   // login
   loginTitle: 'Masaya nasıl oturmak istersiniz?',
@@ -350,6 +354,10 @@ const en: Dictionary = {
   footerLegal: 'Legal notice',
   footerSource: 'Source code',
   footerCoffee: 'Buy me a coffee',
+  footerTagline: 'Leave the paper money in the box. The bank is on everyone’s phone, the game stays on the table.',
+  footerFree: 'Free and open source',
+  footerGuides: 'Game guides',
+  footerLinks: 'BoardBankr',
 
   loginTitle: 'How would you like to sit down?',
   loginJoining: 'You’re about to join game {code}.',

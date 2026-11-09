@@ -252,6 +252,14 @@
     text-transform: uppercase;
     color: var(--ink-3);
   }
+  /* the straight edge of the table, where the paper page meets the felt footer; grain like the round table's rim */
+  .table-rail {
+    height: 14px;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 46px, rgb(0 0 0 / 0.07) 46px 49px, transparent 49px 83px, rgb(255 255 255 / 0.06) 83px 85px),
+      linear-gradient(var(--wood-hi), var(--wood) 45%, #74451f);
+    box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.18), inset 0 -2px 0 var(--wood-dark), 0 5px 10px rgb(0 0 0 / 0.28);
+  }
   .felt .eyebrow {
     color: rgb(255 255 255 / 0.55);
   }
