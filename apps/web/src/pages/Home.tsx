@@ -1,13 +1,35 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { ChevronRight, Dices, LogOut, Pencil, Plus, Ticket, Trophy } from 'lucide-react';
 import {
+  Banknote,
+  ChartLine,
+  ChevronRight,
+  CreditCard,
+  Dices,
+  Gavel,
+  Hand,
+  LogOut,
+  Pencil,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  SlidersHorizontal,
+  Trophy,
+  Undo2,
+  type LucideIcon,
+} from 'lucide-react';
+import {
+  EDITION_PRESETS,
   GAME_CODE_LENGTH,
   NAME_MAX,
   NAME_MIN,
   normalizeGameCode,
+  type CreateGameInput,
+  type Currency,
+  type GameSnapshot,
   type GameSummary,
   type MyGamesResponse,
+  type PlayerColor,
 } from '@mdb/shared';
 import { FitText } from '../components/FitText';
 import { LangSwitch, Logo } from '../components/Logo';
@@ -15,7 +37,8 @@ import { Sheet } from '../components/Sheet';
 import { Token } from '../components/Token';
 import { Button, Field, TextInput, buttonClass } from '../components/ui';
 import { ApiError, api } from '../lib/api';
-import { durationParts, formatDate, formatMoney } from '../lib/format';
+import { compactMoney, durationParts, formatDate, formatMoney } from '../lib/format';
+import type { MessageKey } from '../lib/dictionary';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { useToast } from '../lib/toast';
@@ -96,6 +119,39 @@ export default function Home() {
               {t(greetingKey(), { name: user.name })}
             </h1>
             <p className="mt-1 text-white/75">{current ? t('homeLeadWaiting') : t('homeLead')}</p>
+            {/* the two ways to a table sit on the felt, right under the greeting */}
+            <div className="mt-5 flex w-full max-w-[34rem] flex-col gap-2.5 sm:flex-row">
+              <Link to="/new" className={buttonClass('gold', 'lg')}>
+                <Plus aria-hidden className="size-5" strokeWidth={2.6} />
+                {t('newGame')}
+              </Link>
+              <form
+                onSubmit={join}
+                className="flex h-[3.6rem] min-w-0 flex-1 items-center rounded-2xl bg-white/12 shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.22)] focus-within:shadow-[inset_0_0_0_2px_var(--gold)]"
+              >
+                <label htmlFor="home-code" className="sr-only">
+                  {t('codePlaceholder')}
+                </label>
+                <input
+                  id="home-code"
+                  value={code}
+                  onChange={(e) => {
+                    setCodeError(null);
+                    setCode(normalizeGameCode(e.target.value).slice(0, GAME_CODE_LENGTH));
+                  }}
+                  placeholder={t('codePlaceholder')}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  enterKeyHint="go"
+                  className="h-full min-w-0 flex-1 bg-transparent pl-4 font-display text-lg font-bold tracking-[0.2em] text-white uppercase placeholder:font-sans placeholder:text-base placeholder:font-semibold placeholder:tracking-normal placeholder:normal-case placeholder:text-white/50 focus:outline-none"
+                />
+                <button type="submit" disabled={code.length !== GAME_CODE_LENGTH} className="mr-1.5 h-11 rounded-xl px-4 font-bold text-gold hover:bg-white/10 disabled:text-white/40">
+                  {t('join')}
+                </button>
+              </form>
+            </div>
+            {codeError && <p className="mt-2 text-sm font-bold text-loss-felt">{codeError}</p>}
           </div>
 
           {current && <ResumeCard game={current} />}
@@ -110,60 +166,10 @@ export default function Home() {
       </div>
 
       <main className="mx-auto max-w-5xl px-4 pt-6 pb-20 sm:px-6">
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] lg:gap-8">
-          <div className="flex min-w-0 flex-col gap-4">
-            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
-              <div className="card flex flex-col gap-4 p-5">
-                <div className="flex items-center gap-3.5">
-                  <span aria-hidden data-note="rose" className="tok size-11">
-                    <Dices strokeWidth={2.3} />
-                  </span>
-                  <div>
-                    <h2 className="font-display text-lg font-bold">{t('newGameTile')}</h2>
-                    <p className="text-sm text-ink-2">{t('newGameTileNote')}</p>
-                  </div>
-                </div>
-                <Link to="/new" className={buttonClass('ink')}>
-                  <Plus aria-hidden className="size-5" strokeWidth={2.4} />
-                  {t('newGame')}
-                </Link>
-              </div>
-              <form onSubmit={join} className="card flex flex-col gap-4 p-5">
-                <div className="flex items-center gap-3.5">
-                  <span aria-hidden data-note="lilac" className="tok size-11">
-                    <Ticket strokeWidth={2.3} />
-                  </span>
-                  <div>
-                    <h2 className="font-display text-lg font-bold">{t('joinByCode')}</h2>
-                    <p className="text-sm text-ink-2">{t('joinTileNote')}</p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <label htmlFor="home-code" className="sr-only">
-                    {t('codePlaceholder')}
-                  </label>
-                  <input
-                    id="home-code"
-                    value={code}
-                    onChange={(e) => {
-                      setCodeError(null);
-                      setCode(normalizeGameCode(e.target.value).slice(0, GAME_CODE_LENGTH));
-                    }}
-                    placeholder={t('codeShort')}
-                    autoComplete="off"
-                    autoCapitalize="characters"
-                    spellCheck={false}
-                    enterKeyHint="go"
-                    className="h-[3.1rem] min-w-0 flex-1 rounded-[0.875rem] bg-sand px-3.5 font-display text-xl font-bold tracking-[0.25em] text-ink uppercase placeholder:text-ink-3 focus:shadow-[inset_0_0_0_2px_var(--ink)] focus:outline-none"
-                  />
-                  <Button type="submit" variant={code.length === GAME_CODE_LENGTH ? 'ink' : 'paper'} disabled={code.length !== GAME_CODE_LENGTH}>
-                    {t('join')}
-                  </Button>
-                </div>
-                {codeError && <p className="-mt-1 text-sm font-bold text-loss">{codeError}</p>}
-              </form>
-            </div>
-
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_21rem] lg:gap-8">
+          <div className="flex min-w-0 flex-col gap-8">
+            <QuickStart last={data?.finished[0] ?? null} />
+            <TableFeatures />
             {user.kind === 'guest' && googleEnabled && (
               <section className="flex flex-col gap-3 rounded-[1.25rem] bg-sand p-5 sm:flex-row sm:items-center sm:gap-5">
                 <p className="flex-1 text-[0.95rem] text-ink-2">{t('guestBanner')}</p>
@@ -228,6 +234,134 @@ export default function Home() {
 
       <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} piece={current} />
     </div>
+  );
+}
+
+type Preset = { key: string; title: string; note: string; color: PlayerColor; icon: LucideIcon; input?: CreateGameInput; href?: string };
+
+/**
+ * One tap to a table: the classic box, the electronic box, the last game played again, or
+ * your own rules. The first three open a lobby straight away; only house rules need the form.
+ */
+function QuickStart({ last }: { last: GameSummary | null }) {
+  const { t, lang, locale, errorText } = useI18n();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState<string | null>(null);
+  const currency = lang === 'tr' ? '₺' : '$';
+  const money = (n: number, c: Currency = currency) => compactMoney(n, c, locale);
+
+  const presets: Preset[] = [
+    {
+      key: 'classic',
+      title: t('quickClassic'),
+      note: t('quickAmounts', { capital: money(EDITION_PRESETS.classic.capital), salary: money(EDITION_PRESETS.classic.salary) }),
+      color: 'mint',
+      icon: Banknote,
+      input: { startingCapital: EDITION_PRESETS.classic.capital, salary: EDITION_PRESETS.classic.salary, currency, freeParkingEnabled: false, turnsEnabled: true },
+    },
+    {
+      key: 'electronic',
+      title: t('quickElectronic'),
+      note: t('quickAmounts', { capital: money(EDITION_PRESETS.electronic.capital), salary: money(EDITION_PRESETS.electronic.salary) }),
+      color: 'sky',
+      icon: CreditCard,
+      input: { startingCapital: EDITION_PRESETS.electronic.capital, salary: EDITION_PRESETS.electronic.salary, currency, freeParkingEnabled: false, turnsEnabled: true },
+    },
+    last
+      ? {
+          key: 'last',
+          title: t('quickLast'),
+          note: t('quickAmounts', { capital: money(last.settings.startingCapital, last.currency), salary: money(last.settings.salary, last.currency) }),
+          color: 'peach',
+          icon: RotateCcw,
+          input: { ...last.settings, currency: last.currency },
+        }
+      : { key: 'custom', title: t('quickCustom'), note: t('quickCustomNote'), color: 'lilac', icon: SlidersHorizontal, href: '/new?edition=custom' },
+  ];
+
+  const start = async (p: Preset) => {
+    if (busy) return;
+    if (p.href) return navigate(p.href);
+    setBusy(p.key);
+    try {
+      const res = await api<{ game: GameSnapshot }>('/api/games', { method: 'POST', body: p.input });
+      navigate(`/g/${res.game.code}`);
+    } catch (err) {
+      toast.error(errorText(err instanceof ApiError ? err.code : 'internal'));
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section aria-labelledby="quick-title">
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h2 id="quick-title" className="font-display text-xl font-bold">
+            {t('quickTitle')}
+          </h2>
+          <p className="text-sm text-ink-2">{t('quickLead')}</p>
+        </div>
+        {last && (
+          <Link to="/new?edition=custom" className="shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-gain hover:bg-sand">
+            {t('quickCustom')}
+          </Link>
+        )}
+      </div>
+      <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-3">
+        {presets.map((p) => (
+          <li key={p.key}>
+            <button
+              type="button"
+              onClick={() => start(p)}
+              disabled={busy !== null}
+              className="card group flex h-full w-full items-center gap-3.5 p-4 text-left transition-transform hover:-translate-y-0.5 disabled:opacity-70 sm:flex-col sm:items-start sm:gap-3"
+            >
+              <span aria-hidden data-note={p.color} className="tok size-11 shrink-0">
+                {busy === p.key ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <p.icon strokeWidth={2.3} />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display text-[1.05rem] leading-tight font-bold">{p.title}</span>
+                <span className="mt-0.5 block text-sm text-ink-2 tabular">{p.note}</span>
+              </span>
+              <ChevronRight aria-hidden className="size-5 shrink-0 text-ink-3 sm:hidden" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const FEATURES: { color: PlayerColor; icon: LucideIcon; title: MessageKey; body: MessageKey }[] = [
+  { color: 'rose', icon: Hand, title: 'featDragTitle', body: 'featDragBody' },
+  { color: 'sun', icon: Gavel, title: 'featAuctionTitle', body: 'featAuctionBody' },
+  { color: 'sky', icon: Dices, title: 'featDiceTitle', body: 'featDiceBody' },
+  { color: 'mint', icon: Undo2, title: 'featUndoTitle', body: 'featUndoBody' },
+  { color: 'lilac', icon: RefreshCw, title: 'featTurnsTitle', body: 'featTurnsBody' },
+  { color: 'aqua', icon: ChartLine, title: 'featChartTitle', body: 'featChartBody' },
+];
+
+/** What the table can do, so nobody finds out only halfway through a game. */
+function TableFeatures() {
+  const { t } = useI18n();
+  return (
+    <section aria-labelledby="features-title">
+      <h2 id="features-title" className="mb-4 font-display text-xl font-bold">
+        {t('featuresHomeTitle')}
+      </h2>
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {FEATURES.map((f) => (
+          <li key={f.title} className="card flex flex-col gap-2.5 p-4">
+            <span aria-hidden data-note={f.color} className="tok size-10">
+              <f.icon strokeWidth={2.3} />
+            </span>
+            <h3 className="font-display leading-tight font-bold">{t(f.title)}</h3>
+            <p className="text-[0.85rem] leading-snug text-ink-2">{t(f.body)}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

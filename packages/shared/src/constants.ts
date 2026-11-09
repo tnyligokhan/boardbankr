@@ -31,6 +31,12 @@ export const PLAYER_TOKENS = [
 ] as const;
 export type PlayerToken = (typeof PLAYER_TOKENS)[number];
 
+/** Ready-made setups for the two kinds of box: paper money, and the million-scale card unit. */
+export const EDITION_PRESETS = {
+  classic: { capital: 1500, salary: 200 },
+  electronic: { capital: 15_000_000, salary: 2_000_000 },
+} as const;
+
 export const CURRENCIES = ['$', '₺', '€', '£'] as const;
 export type Currency = (typeof CURRENCIES)[number];
 

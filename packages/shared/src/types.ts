@@ -158,6 +158,8 @@ export interface GameSummary {
   /** Null when it's my turn, when turns are off or the game isn't running. */
   turnName: string | null;
   myTurn: boolean;
+  /** The game's setup, to start another one just like it. */
+  settings: { startingCapital: number; salary: number; freeParkingEnabled: boolean; turnsEnabled: boolean };
 }
 
 export interface MyGamesResponse {

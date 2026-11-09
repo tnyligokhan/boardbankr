@@ -581,6 +581,7 @@ export class GameService {
           ? (names.get(`${g.id}:${g.turnUserId}`) ?? null)
           : null,
       myTurn: g.status === 'active' && g.turnUserId === userId,
+      settings: { startingCapital: g.startingCapital, salary: g.salary, freeParkingEnabled: g.freeParkingEnabled, turnsEnabled: g.turnsEnabled },
     });
 
     const [stats] = await this.db

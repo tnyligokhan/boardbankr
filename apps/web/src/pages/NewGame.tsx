@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, SlidersHorizontal } from 'lucide-react';
-import { AMOUNT_MAX, CURRENCIES, type Currency, type GameSnapshot } from '@mdb/shared';
+import { AMOUNT_MAX, CURRENCIES, EDITION_PRESETS, type Currency, type GameSnapshot } from '@mdb/shared';
 import { FitText } from '../components/FitText';
 import { Button, Segmented, Toggle } from '../components/ui';
 import { ApiError, api } from '../lib/api';
@@ -11,10 +11,7 @@ import { useToast } from '../lib/toast';
 
 type Edition = 'classic' | 'electronic' | 'custom';
 
-const EDITIONS: Record<Exclude<Edition, 'custom'>, { capital: number; salary: number }> = {
-  classic: { capital: 1500, salary: 200 },
-  electronic: { capital: 15_000_000, salary: 2_000_000 },
-};
+const EDITIONS: Record<Exclude<Edition, 'custom'>, { capital: number; salary: number }> = EDITION_PRESETS;
 
 /** Three paper notes fanned out: the classic box. */
 function NotesArt() {
