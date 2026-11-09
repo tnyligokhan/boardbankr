@@ -447,11 +447,12 @@
     container-type: size;
   }
   /*
-   * As wide as fits, but never taller than the space. The 6.7rem is what hangs outside the
+   * As wide as fits, but never taller than the space. 1.75rem leaves the side name plates (up
+   * to 6rem wide, centred on the rim) a few pixels from the screen edge. The 6.7rem is what hangs outside the
    * square: the top plate (pushed up further when its player wears the crown) and mine below.
    */
   .table-fit > .table {
-    width: min(25rem, calc(100cqw - 3rem), calc(100cqh - 6.7rem));
+    width: min(25rem, calc(100cqw - 1.75rem), calc(100cqh - 6.7rem));
     margin: 3.8rem auto 2.9rem;
   }
   /* short screens: the drag hint goes first, then the buttons get slimmer */
@@ -467,12 +468,6 @@
     }
     .game-screen .tool-tile {
       height: 3.1rem;
-    }
-  }
-  /* very short screens: the turn pill goes too; the gold ring and the turn button still say whose turn it is */
-  @media (max-height: 700px) {
-    .game-turn-pill {
-      display: none;
     }
   }
 

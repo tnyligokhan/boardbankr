@@ -267,29 +267,30 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
         />
 
         <main className="mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col items-center px-4">
-          <section className="flex shrink-0 flex-col items-center gap-0.5 text-center" aria-live="polite">
-            <p className="eyebrow">{imIn ? t('yourBalance') : me.status === 'bankrupt' ? t('bankrupt') : t('left')}</p>
-            <FitText className="max-w-full font-display text-[clamp(2.2rem,min(12vw,7dvh),3.6rem)] leading-none font-extrabold text-gold tabular [text-shadow:0_3px_0_rgb(0_0_0/0.22)]">
-              <span key={balance.change ? `${me.balance}` : 'still'} className="inline-block" style={balance.change ? { animation: 'bump 500ms cubic-bezier(0.3, 1.6, 0.5, 1)' } : undefined}>
-                {money(balance.shown)}
-              </span>
-            </FitText>
-            <p className={`h-4 font-display text-[0.9rem] leading-4 font-bold ${balance.change === 'gain' ? 'text-gain-felt' : 'text-loss-felt'}`}>
-              {balance.change ? `${balance.delta > 0 ? '+' : '−'}${money(Math.abs(balance.delta))}` : ''}
-            </p>
-          </section>
-
-          {turnPlayer && (
-            <div className="game-turn-pill mt-1 shrink-0">
+          {/* one row: my balance on the left, whose turn it is on the right, so the table gets the height */}
+          <section className={`flex w-full shrink-0 items-center gap-3 ${turnPlayer ? 'justify-between' : 'justify-center text-center'}`} aria-live="polite">
+            <div className={`relative flex min-w-0 flex-col ${turnPlayer ? 'items-start' : 'items-center'}`}>
+              <p className="eyebrow">{imIn ? t('yourBalance') : me.status === 'bankrupt' ? t('bankrupt') : t('left')}</p>
+              <FitText className="max-w-full font-display text-[clamp(1.9rem,min(10vw,5.5dvh),3rem)] leading-[1.05] font-extrabold text-gold tabular [text-shadow:0_3px_0_rgb(0_0_0/0.22)]">
+                <span key={balance.change ? `${me.balance}` : 'still'} className="inline-block" style={balance.change ? { animation: 'bump 500ms cubic-bezier(0.3, 1.6, 0.5, 1)' } : undefined}>
+                  {money(balance.shown)}
+                </span>
+              </FitText>
+              {/* the change floats under the number instead of keeping a line free for it */}
+              <p className={`pointer-events-none absolute top-full font-display text-[0.85rem] leading-4 font-bold whitespace-nowrap ${balance.change === 'gain' ? 'text-gain-felt' : 'text-loss-felt'}`}>
+                {balance.change ? `${balance.delta > 0 ? '+' : '−'}${money(Math.abs(balance.delta))}` : ''}
+              </p>
+            </div>
+            {turnPlayer && (
               <span
-                className={`inline-flex h-9 items-center gap-2 rounded-full pr-4 pl-1 font-display text-sm font-semibold ${myTurn ? 'bg-gold text-gold-ink' : 'bg-black/25'}`}
+                className={`inline-flex h-10 max-w-[48%] shrink-0 items-center gap-2 rounded-full pr-3.5 pl-1 font-display text-sm font-semibold ${myTurn ? 'bg-gold text-gold-ink' : 'bg-black/25'}`}
                 style={myTurn ? { animation: 'glow 1.6s ease-in-out infinite' } : undefined}
               >
-                <Token color={turnPlayer.color} token={turnPlayer.token} size={28} />
-                {myTurn ? t('yourTurn') : t('playing', { name: turnPlayer.name })}
+                <Token color={turnPlayer.color} token={turnPlayer.token} size={30} />
+                <span className="truncate">{myTurn ? t('turnYou') : t('turnOther', { name: turnPlayer.name })}</span>
               </span>
-            </div>
-          )}
+            )}
+          </section>
 
           {auction?.status === 'open' && <AuctionBanner auction={auction} left={auctionLeft} onOpen={() => setAuctionOpen(true)} />}
 
