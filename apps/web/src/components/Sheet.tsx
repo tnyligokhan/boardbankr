@@ -50,7 +50,7 @@ export function Sheet({
     >
       {open && (
         <>
-          <div className="relative flex items-center gap-2 px-5 pt-5 pb-2">
+          <div className="relative flex shrink-0 items-center gap-2 px-5 pt-5 pb-2">
             <span aria-hidden className="absolute top-2 left-1/2 h-[5px] w-10 -translate-x-1/2 rounded-full bg-line sm:hidden" />
             <h2 className="flex-1 font-display text-xl font-bold">{title}</h2>
             <button
@@ -62,8 +62,10 @@ export function Sheet({
               <X aria-hidden className="size-5" />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5">{children}</div>
-          {footer && <div className="px-5 pt-2 pb-safe">{footer}</div>}
+          {/* flex-auto, not flex-1: Safari resolves flex-basis 0% to nothing in a column whose height
+              is only capped by max-height, so on iOS the body collapsed and the sheet came up half-empty */}
+          <div className={`min-h-0 flex-auto overflow-y-auto overscroll-contain px-5 ${footer ? 'pb-5' : 'pb-safe'}`}>{children}</div>
+          {footer && <div className="shrink-0 px-5 pt-2 pb-safe">{footer}</div>}
         </>
       )}
     </dialog>

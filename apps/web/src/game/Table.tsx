@@ -219,6 +219,7 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
 
   const onDrop = useCallback((target: string) => setPay({ kind: 'pay', to: target }), []);
   const onTapMe = useCallback(() => setPay({ kind: 'pay', to: null }), []);
+  const onTake = useCallback(() => setPay({ kind: 'take' }), []);
 
   const others = game.players.filter((p) => p.userId !== meId);
   const active = game.players.filter((p) => p.status === 'active');
@@ -310,6 +311,7 @@ export function Table({ game, meId, connection, act, finish, kick, leave, endTur
               label={t('players')}
               onSeat={imIn ? (id) => setPay({ kind: 'pay', to: id }) : undefined}
               onDrop={imIn ? onDrop : undefined}
+              onTake={imIn ? onTake : undefined}
               onTapMe={imIn ? onTapMe : undefined}
               center={
                 <>

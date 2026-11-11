@@ -735,9 +735,15 @@
     border: 2px dashed rgb(255 197 61 / 0.7);
     animation: spin 14s linear infinite;
   }
-  .table[data-dragging] .seat[data-drop] > .tok,
-  .table[data-dragging] [data-drop].bank-chip,
-  .table[data-dragging] [data-drop].pot-chip {
+  /* the bank chip can be dragged onto my piece to take money */
+  .table[data-take] .bank-chip[data-drop='bank'] {
+    cursor: grab;
+    touch-action: none;
+  }
+  .table[data-dragging='pay'] .seat[data-drop] > .tok,
+  .table[data-dragging='take'] .seat[data-me] > .tok,
+  .table[data-dragging='pay'] [data-drop].bank-chip,
+  .table[data-dragging='pay'] [data-drop].pot-chip {
     box-shadow: 0 0 0 4px rgb(255 197 61 / 0.35), 0 3px 0 rgb(0 0 0 / 0.28);
   }
   .table [data-over] > .tok,

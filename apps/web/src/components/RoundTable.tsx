@@ -30,7 +30,8 @@ const angleOf = (i: number, n: number) => 90 + (i * 360) / n;
 /**
  * The card table. Seats sit around a wood-rimmed felt top; the centre holds the bank or the game code.
  * The player at the bottom (`meId`) can drag their piece onto another seat, the bank or the pot;
- * any element inside the table marked `data-drop` is a target.
+ * any element inside the table marked `data-drop` is a target. With `onTake`, the bank chip can be
+ * dragged onto my piece the other way.
  */
 export const RoundTable = forwardRef<
   RoundTableHandle,
@@ -44,6 +45,8 @@ export const RoundTable = forwardRef<
     onSeat?: (id: string) => void;
     /** Dragging my piece: id of a seat, or 'bank' / 'parking'. Without it, my piece can't be dragged. */
     onDrop?: (target: string) => void;
+    /** Dragging the bank chip onto my piece: take money from the bank. */
+    onTake?: () => void;
     /** Tapping my piece without dragging. */
     onTapMe?: () => void;
     className?: string;
@@ -51,7 +54,7 @@ export const RoundTable = forwardRef<
     /** Shown on the coin while dragging. */
     coin?: string;
   }
->(function RoundTable({ seats, center, meId, turnId, crownId, onSeat, onDrop, onTapMe, className = '', label, coin = '₺' }, ref) {
+>(function RoundTable({ seats, center, meId, turnId, crownId, onSeat, onDrop, onTake, onTapMe, className = '', label, coin = '₺' }, ref) {
   const box = useRef<HTMLDivElement>(null);
   const n = seats.length;
   const meSeated = seats.some((s) => s !== null && s.id === meId && !s.out);
@@ -76,62 +79,108 @@ export const RoundTable = forwardRef<
     },
   }));
 
-  // dragging my piece to someone
+  // Dragging a coin across the table: my piece onto a seat / the bank / the pot pays,
+  // the bank chip onto my piece takes money from the bank.
   useEffect(() => {
     const el = box.current;
-    const mine = meId ? el?.querySelector<HTMLElement>(`[data-seat="${CSS.escape(meId)}"] > .tok`) : null;
-    if (!el || !mine || !onDrop) return;
-    const down = (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      const start = { x: e.clientX, y: e.clientY };
-      let moved = false;
-      let ghost: HTMLDivElement | null = null;
-      let over: HTMLElement | null = null;
-      mine.setPointerCapture(e.pointerId);
-      const move = (ev: PointerEvent) => {
-        if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 8) {
-          moved = true;
-          ghost = document.createElement('div');
-          ghost.className = 'coin';
-          ghost.textContent = coin;
-          document.body.append(ghost);
-          el.dataset.dragging = '';
-          buzz(8);
-        }
-        if (!moved || !ghost) return;
-        ghost.style.transform = `translate(${ev.clientX - 21}px,${ev.clientY - 21}px) scale(1.15)`;
-        const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-drop]');
-        const target = hit && el.contains(hit) ? hit : null;
-        if (target !== over) {
-          if (over) delete over.dataset.over;
-          over = target;
-          if (over) {
-            over.dataset.over = '';
-            buzz(10);
+    if (!el) return;
+    const mine = meId ? el.querySelector<HTMLElement>(`[data-seat="${CSS.escape(meId)}"] > .tok`) : null;
+    const mySeat = mine?.parentElement ?? null;
+    const bank = onTake ? el.querySelector<HTMLElement>('[data-drop="bank"]') : null;
+
+    const drag = (
+      source: HTMLElement,
+      kind: 'pay' | 'take',
+      targetAt: (x: number, y: number) => HTMLElement | null,
+      onTap: (() => void) | undefined,
+      onHit: (target: HTMLElement) => void,
+    ) => {
+      const down = (e: PointerEvent) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const start = { x: e.clientX, y: e.clientY };
+        let moved = false;
+        let ghost: HTMLDivElement | null = null;
+        let over: HTMLElement | null = null;
+        source.setPointerCapture(e.pointerId);
+        const move = (ev: PointerEvent) => {
+          if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 8) {
+            moved = true;
+            ghost = document.createElement('div');
+            ghost.className = 'coin';
+            ghost.textContent = coin;
+            document.body.append(ghost);
+            el.dataset.dragging = kind;
+            buzz(8);
           }
-        }
+          if (!moved || !ghost) return;
+          ghost.style.transform = `translate(${ev.clientX - 21}px,${ev.clientY - 21}px) scale(1.15)`;
+          const target = targetAt(ev.clientX, ev.clientY);
+          if (target !== over) {
+            if (over) delete over.dataset.over;
+            over = target;
+            if (over) {
+              over.dataset.over = '';
+              buzz(10);
+            }
+          }
+        };
+        const up = () => {
+          source.removeEventListener('pointermove', move);
+          source.removeEventListener('pointerup', up);
+          source.removeEventListener('pointercancel', up);
+          delete el.dataset.dragging;
+          ghost?.remove();
+          if (over) delete over.dataset.over;
+          if (!moved) onTap?.();
+          else {
+            // a drag is not a tap: swallow the click a button would fire after it
+            const swallow = (c: Event) => c.stopPropagation();
+            source.addEventListener('click', swallow, { capture: true, once: true });
+            setTimeout(() => source.removeEventListener('click', swallow, { capture: true }), 400);
+            if (over) onHit(over);
+          }
+        };
+        source.addEventListener('pointermove', move);
+        source.addEventListener('pointerup', up);
+        source.addEventListener('pointercancel', up);
       };
-      const up = () => {
-        mine.removeEventListener('pointermove', move);
-        mine.removeEventListener('pointerup', up);
-        mine.removeEventListener('pointercancel', up);
-        delete el.dataset.dragging;
-        ghost?.remove();
-        if (over) delete over.dataset.over;
-        if (!moved) onTapMe?.();
-        else if (over) onDrop(over.dataset.drop === 'player' ? over.dataset.seat! : over.dataset.drop!);
-      };
-      mine.addEventListener('pointermove', move);
-      mine.addEventListener('pointerup', up);
-      mine.addEventListener('pointercancel', up);
+      source.addEventListener('pointerdown', down);
+      return () => source.removeEventListener('pointerdown', down);
     };
-    mine.addEventListener('pointerdown', down);
-    return () => mine.removeEventListener('pointerdown', down);
-  }, [meId, meSeated, onDrop, onTapMe, coin]);
+
+    const off: (() => void)[] = [];
+    if (mine && onDrop) {
+      off.push(
+        drag(
+          mine,
+          'pay',
+          (x, y) => {
+            const hit = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop]');
+            return hit && el.contains(hit) ? hit : null;
+          },
+          onTapMe,
+          (t) => onDrop(t.dataset.drop === 'player' ? t.dataset.seat! : t.dataset.drop!),
+        ),
+      );
+    }
+    if (bank && mySeat && onTake) {
+      off.push(
+        drag(
+          bank,
+          'take',
+          (x, y) => (mySeat.contains(document.elementFromPoint(x, y)) ? mySeat : null),
+          // a plain tap keeps the button's own click (paying the bank)
+          undefined,
+          () => onTake(),
+        ),
+      );
+    }
+    return () => off.forEach((f) => f());
+  }, [meId, meSeated, onDrop, onTapMe, onTake, coin]);
 
   return (
-    <div ref={box} className={`table ${className}`} role="group" aria-label={label}>
+    <div ref={box} className={`table ${className}`} role="group" aria-label={label} data-take={(onTake && meSeated) || undefined}>
       <div aria-hidden className="table-top" />
       <div className="table-center">{center}</div>
       {seats.map((s, i) => {
