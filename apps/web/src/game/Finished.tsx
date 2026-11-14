@@ -166,7 +166,7 @@ export function Finished({ game, meId, connection }: { game: GameSnapshot; meId:
                 ariaLabel={t('chartAria')}
               />
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/75">
-                {series.length > 1 && story.leadChanges > 0 && <span>{t('leadChanged', { n: story.leadChanges })}</span>}
+                {series.length > 1 && story.leadChanges > 0 && <span>{story.leadChanges === 1 ? t('leadChangedOnce') : t('leadChanged', { n: story.leadChanges })}</span>}
                 {story.best && (
                   <span>
                     {t('biggestJump', { round: story.best.i, name: story.best.s.name, amount: money(story.best.d) })}

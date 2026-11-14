@@ -479,6 +479,8 @@
     aspect-ratio: 1;
     /* seats stick out past the square with their name plates: above at the top, below at the bottom */
     margin: 2.75rem auto 3rem;
+    /* its own stacking context, so the wood rim (z-index -1) stays above the felt behind the table */
+    isolation: isolate;
     user-select: none;
     -webkit-user-select: none;
   }
