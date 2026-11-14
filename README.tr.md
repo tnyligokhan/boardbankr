@@ -1,8 +1,23 @@
+![BoardBankr: Monopoly ve kâğıt paralı tüm kutu oyunları için dijital banka](.github/assets/banner-tr.jpg)
+
 # BoardBankr: Monopoly ve masa oyunları için dijital banka
 
 Monopoly, Molipoly, Metropol, Cashflow ve kâğıt parayla oynanan tüm masa oyunları için ücretsiz, açık kaynak dijital banka ve para takibi. Tarayıcıda çalışır, indirme gerekmez: herkes bakiyesini kendi telefonunda görür; kira, maaş ve ceza ödemeleri bir dokunuşla yapılır. Elektronik bankacılık kutusunun kart okuyucusu bozulduğunda yedek olarak da kullanılır.
 
 [English](README.md)
+
+## Ekran görüntüleri
+
+![Telefonda lobi, masa, ödeme ve oyun sonu grafiği](.github/assets/showcase-tr.jpg)
+
+<details>
+<summary>Daha fazla ekran görüntüsü</summary>
+
+| Ödeme geçmişi | Kürsü | Ana sayfa |
+|---|---|---|
+| <img src=".github/assets/screenshots/tr/4-history.jpg" width="260" alt="Ödeme geçmişi"> | <img src=".github/assets/screenshots/tr/5-podium.jpg" width="260" alt="Oyun sonunda kürsü"> | <img src=".github/assets/screenshots/tr/0-landing.jpg" width="420" alt="Masaüstünde ana sayfa"> |
+
+</details>
 
 ## Özellikler
 

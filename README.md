@@ -1,8 +1,23 @@
+![BoardBankr: the digital bank for Monopoly and every paper-money board game](.github/assets/banner-en.jpg)
+
 # BoardBankr: a digital bank for Monopoly and board games
 
 A free, open-source digital banker and money tracker for Monopoly, Cashflow, Hotel Tycoon and any board game played with paper money. Runs in the browser, so there is nothing to install: everyone sees their balance on their own phone, and rent, salary and fines are paid with a tap. Also works as a stand-in when the card unit of an electronic banking edition breaks.
 
 [Türkçe](README.tr.md)
+
+## Screenshots
+
+![The lobby, the table, a payment and the end-of-game chart on a phone](.github/assets/showcase-en.jpg)
+
+<details>
+<summary>More screenshots</summary>
+
+| Payment history | Podium | Start page |
+|---|---|---|
+| <img src=".github/assets/screenshots/en/4-history.jpg" width="260" alt="Payment history"> | <img src=".github/assets/screenshots/en/5-podium.jpg" width="260" alt="Podium at the end of a game"> | <img src=".github/assets/screenshots/en/0-landing.jpg" width="420" alt="Start page on desktop"> |
+
+</details>
 
 ## Features
 
