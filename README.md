@@ -1,4 +1,5 @@
 [![GiTRay](https://gitray.net/api/badge?repo=tnyligokhan/boardbankr)](https://gitray.net/en/scan/tnyligokhan/boardbankr)
+
 ![BoardBankr: the digital bank for Monopoly and every paper-money board game](.github/assets/banner-en.jpg)
 
 # BoardBankr: a digital bank for Monopoly and board games
