@@ -106,3 +106,6 @@ MIT
 ## Markalar
 
 Monopoly, Hasbro, Inc.’in tescilli markasıdır; adı geçen diğer oyun adları da sahiplerine aittir. BoardBankr bağımsız, açık kaynak bir yardımcı araçtır; Hasbro ya da başka bir oyun üreticisiyle bağlantılı değildir ve onlar tarafından onaylanmamıştır. Uygulamadaki paralar sanaldır, gerçek bir değeri yoktur.
+
+
+[![GiTRay](https://gitray.net/api/badge?repo=tnyligokhan/boardbankr)](https://gitray.net/en/scan/tnyligokhan/boardbankr)
